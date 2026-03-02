@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { createAccessRequest } from '@/actions/access-requests';
@@ -99,7 +100,7 @@ export function RequestAccessDialog({ open, onOpenChange }: RequestAccessDialogP
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ra-phone">Phone *</Label>
-                <Input id="ra-phone" {...register('phone')} placeholder="(707) 000-0000" />
+                <PhoneInput id="ra-phone" {...register('phone')} placeholder="(707) 000-0000" />
                 {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
               </div>
             </div>

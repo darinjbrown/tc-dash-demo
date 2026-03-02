@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { Label } from '@/components/ui/label';
 import { createAgent, updateAgent } from '@/actions/agents';
 import type { AgentWithStats } from '@/actions/agents';
@@ -112,7 +113,7 @@ export function AgentForm({ agent, open, onOpenChange, onSuccess }: AgentFormPro
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="agent-phone">Phone</Label>
-              <Input id="agent-phone" {...register('phone')} placeholder="(707) 000-0000" />
+              <PhoneInput id="agent-phone" {...register('phone')} placeholder="(707) 000-0000" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="agent-license">CA DRE License #</Label>

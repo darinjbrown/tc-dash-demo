@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -552,7 +553,7 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="escrowOfficerPhone">Escrow Phone</Label>
-                <Input id="escrowOfficerPhone" {...register('escrowOfficerPhone')} />
+                <PhoneInput id="escrowOfficerPhone" {...register('escrowOfficerPhone')} />
               </div>
               <div className="col-span-2 space-y-1.5">
                 <Label htmlFor="escrowOfficerEmail">Escrow Email</Label>
@@ -587,7 +588,7 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="loanOfficerPhone">Loan Officer Phone</Label>
-                <Input id="loanOfficerPhone" {...register('loanOfficerPhone')} />
+                <PhoneInput id="loanOfficerPhone" {...register('loanOfficerPhone')} />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="loanOfficerEmail">Loan Officer Email</Label>

@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { Label } from '@/components/ui/label';
 import { createAgent } from '@/actions/agents';
 
@@ -85,7 +86,7 @@ export function QuickAddAgentDialog({ open, onOpenChange, onAgentCreated }: Quic
 
           <div className="space-y-1.5">
             <Label htmlFor="qa-phone">Phone</Label>
-            <Input id="qa-phone" {...register('phone')} placeholder="(707) 000-0000" />
+            <PhoneInput id="qa-phone" {...register('phone')} placeholder="(707) 000-0000" />
           </div>
 
           <div className="space-y-1.5">
