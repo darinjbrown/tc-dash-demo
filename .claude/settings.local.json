@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(while read f)",
+      "Bash(do cp -r \"$f\" .)",
+      "Bash(done)",
+      "Bash(npm install)",
+      "Bash(npm install drizzle-orm @libsql/client @auth/core @auth/drizzle-adapter next-auth@beta react-hook-form @hookform/resolvers zod zustand date-fns uuid next-themes)"
+    ]
+  }
+}
