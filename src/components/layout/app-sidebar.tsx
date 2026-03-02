@@ -32,7 +32,6 @@ import {
   Settings,
   ChevronUp,
   LogOut,
-  Building2,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -71,19 +70,18 @@ export function AppSidebar() {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
+            <SidebarMenuButton size="lg" asChild tooltip={brand.name}>
               <Link href="/dashboard">
-                <div className="bg-primary text-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg shrink-0">
-                  <Building2 className="size-4" />
-                </div>
-                <div className="flex flex-col gap-0.5 leading-none min-w-0">
-                  <span className="font-semibold truncate">{brand.name}</span>
-                  {brand.tagline && (
-                    <span className="text-xs text-muted-foreground truncate">
-                      {brand.tagline}
-                    </span>
-                  )}
-                </div>
+                {/* Full logo at natural aspect ratio — no width constraint */}
+                <img
+                  src={brand.logo}
+                  alt={brand.name}
+                  className="h-9 w-auto object-contain shrink-0"
+                />
+                {/* Tagline — hidden automatically in collapsed icon-only mode */}
+                <span className="text-xs text-muted-foreground leading-tight truncate">
+                  {brand.tagline}
+                </span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

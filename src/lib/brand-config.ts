@@ -38,10 +38,10 @@ export interface BrandConfig {
 
 // DEFAULT BRAND — replace this object to rebrand the entire app
 export const defaultBrand: BrandConfig = {
-  name: 'TC Dashboard',
+  name: 'Bertolone Realty',
   tagline: 'Transaction Management',
-  logo: '/brand/logo.svg',
-  logoIcon: '/brand/icon.svg',
+  logo: '/bertoloneLogo.png',
+  logoIcon: '/bertoloneLogo.png',
   colors: {
     background: '0 0% 100%',
     foreground: '222.2 84% 4.9%',
