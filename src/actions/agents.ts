@@ -15,6 +15,7 @@ export type AgentFormValues = {
   name: string;
   email: string;
   phone?: string;
+  broker?: string;
   licenseNumber?: string;
   brokerageId?: string;
 };
@@ -24,6 +25,7 @@ const agentSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   email: z.string().email('Valid email required'),
   phone: z.string().optional(),
+  broker: z.string().optional(),
   licenseNumber: z.string().optional(),
   brokerageId: z.string().optional(),
 });
@@ -37,6 +39,7 @@ export async function getAgents(): Promise<AgentWithStats[]> {
       name: agents.name,
       email: agents.email,
       phone: agents.phone,
+      broker: agents.broker,
       licenseNumber: agents.licenseNumber,
       brokerageId: agents.brokerageId,
       isActive: agents.isActive,
@@ -53,9 +56,9 @@ export async function getAgents(): Promise<AgentWithStats[]> {
   return rows;
 }
 
-export async function getAgentsForSelect(): Promise<{ id: string; name: string }[]> {
+export async function getAgentsForSelect(): Promise<{ id: string; name: string; broker: string | null }[]> {
   return db
-    .select({ id: agents.id, name: agents.name })
+    .select({ id: agents.id, name: agents.name, broker: agents.broker })
     .from(agents)
     .where(eq(agents.isActive, true))
     .orderBy(asc(agents.name));
@@ -65,24 +68,26 @@ export async function getAgentsForSelect(): Promise<{ id: string; name: string }
 
 export async function createAgent(
   data: AgentFormValues,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: { id: string; name: string; broker: string | null }; error?: string }> {
   const parsed = agentSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
   }
   const v = parsed.data;
+  const id = crypto.randomUUID();
 
   try {
     await db.insert(agents).values({
-      id: crypto.randomUUID(),
+      id,
       name: v.name,
       email: v.email,
       phone: v.phone?.trim() || null,
+      broker: v.broker?.trim() || null,
       licenseNumber: v.licenseNumber?.trim() || null,
       brokerageId: v.brokerageId?.trim() || null,
     });
     revalidatePath('/agents');
-    return { success: true };
+    return { success: true, data: { id, name: v.name, broker: v.broker?.trim() || null } };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create agent';
     return { success: false, error: message };
@@ -106,6 +111,7 @@ export async function updateAgent(
         name: v.name,
         email: v.email,
         phone: v.phone?.trim() || null,
+        broker: v.broker?.trim() || null,
         licenseNumber: v.licenseNumber?.trim() || null,
         brokerageId: v.brokerageId?.trim() || null,
         updatedAt: new Date(),

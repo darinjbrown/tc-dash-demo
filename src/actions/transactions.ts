@@ -25,10 +25,12 @@ export type TransactionSummary = {
   state: string | null;
   zipCode: string | null;
   mlsNumber: string | null;
-  listingAgentId: string | null;
-  listingAgentName: string | null;
-  sellingAgentId: string | null;
-  sellingAgentName: string | null;
+  sellerAgentId: string | null;
+  sellerAgentName: string | null;
+  sellerAgentIsInHouse: boolean | null;
+  buyerAgentId: string | null;
+  buyerAgentName: string | null;
+  buyerAgentIsInHouse: boolean | null;
   transactionType: string;
   status: string;
   propertyType: string | null;
@@ -54,12 +56,14 @@ export type ActivityEntry = {
 };
 
 export type TransactionDetail = Transaction & {
-  listingAgentName: string | null;
-  listingAgentEmail: string | null;
-  listingAgentPhone: string | null;
-  sellingAgentName: string | null;
-  sellingAgentEmail: string | null;
-  sellingAgentPhone: string | null;
+  sellerAgentName: string | null;
+  sellerAgentEmail: string | null;
+  sellerAgentPhone: string | null;
+  sellerAgentBroker: string | null;
+  buyerAgentName: string | null;
+  buyerAgentEmail: string | null;
+  buyerAgentPhone: string | null;
+  buyerAgentBroker: string | null;
   tasks: TransactionTask[];
   activity: ActivityEntry[];
 };
@@ -87,10 +91,12 @@ export async function getTransactions(): Promise<AgentTransactionGroup[]> {
       state: transactions.state,
       zipCode: transactions.zipCode,
       mlsNumber: transactions.mlsNumber,
-      listingAgentId: transactions.listingAgentId,
-      listingAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.listingAgentId})`,
-      sellingAgentId: transactions.sellingAgentId,
-      sellingAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.sellingAgentId})`,
+      sellerAgentId: transactions.sellerAgentId,
+      sellerAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.sellerAgentId})`,
+      sellerAgentIsInHouse: transactions.sellerAgentIsInHouse,
+      buyerAgentId: transactions.buyerAgentId,
+      buyerAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.buyerAgentId})`,
+      buyerAgentIsInHouse: transactions.buyerAgentIsInHouse,
       transactionType: transactions.transactionType,
       status: transactions.status,
       propertyType: transactions.propertyType,
@@ -129,9 +135,9 @@ export async function getTransactions(): Promise<AgentTransactionGroup[]> {
   const ungroupedKey = '__none__';
 
   for (const s of summaries) {
-    // Group by listing agent first, fall back to selling agent
-    const primaryId = s.listingAgentId ?? s.sellingAgentId;
-    const primaryName = s.listingAgentId ? s.listingAgentName : s.sellingAgentName;
+    // Group by seller's agent first (our listing side), fall back to buyer's agent
+    const primaryId = s.sellerAgentId ?? s.buyerAgentId;
+    const primaryName = s.sellerAgentId ? s.sellerAgentName : s.buyerAgentName;
     const key = primaryId ?? ungroupedKey;
     if (!groupMap.has(key)) {
       groupMap.set(key, { agentId: primaryId, agentName: primaryName, transactions: [] });
@@ -151,8 +157,10 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
       state: transactions.state,
       zipCode: transactions.zipCode,
       mlsNumber: transactions.mlsNumber,
-      listingAgentId: transactions.listingAgentId,
-      sellingAgentId: transactions.sellingAgentId,
+      sellerAgentId: transactions.sellerAgentId,
+      sellerAgentIsInHouse: transactions.sellerAgentIsInHouse,
+      buyerAgentId: transactions.buyerAgentId,
+      buyerAgentIsInHouse: transactions.buyerAgentIsInHouse,
       transactionType: transactions.transactionType,
       status: transactions.status,
       propertyType: transactions.propertyType,
@@ -186,12 +194,14 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
       createdBy: transactions.createdBy,
       createdAt: transactions.createdAt,
       updatedAt: transactions.updatedAt,
-      listingAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.listingAgentId})`,
-      listingAgentEmail: sql<string | null>`(select email from agents where agents.id = ${transactions.listingAgentId})`,
-      listingAgentPhone: sql<string | null>`(select phone from agents where agents.id = ${transactions.listingAgentId})`,
-      sellingAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.sellingAgentId})`,
-      sellingAgentEmail: sql<string | null>`(select email from agents where agents.id = ${transactions.sellingAgentId})`,
-      sellingAgentPhone: sql<string | null>`(select phone from agents where agents.id = ${transactions.sellingAgentId})`,
+      sellerAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.sellerAgentId})`,
+      sellerAgentEmail: sql<string | null>`(select email from agents where agents.id = ${transactions.sellerAgentId})`,
+      sellerAgentPhone: sql<string | null>`(select phone from agents where agents.id = ${transactions.sellerAgentId})`,
+      sellerAgentBroker: sql<string | null>`(select broker from agents where agents.id = ${transactions.sellerAgentId})`,
+      buyerAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.buyerAgentId})`,
+      buyerAgentEmail: sql<string | null>`(select email from agents where agents.id = ${transactions.buyerAgentId})`,
+      buyerAgentPhone: sql<string | null>`(select phone from agents where agents.id = ${transactions.buyerAgentId})`,
+      buyerAgentBroker: sql<string | null>`(select broker from agents where agents.id = ${transactions.buyerAgentId})`,
     })
     .from(transactions)
     .where(eq(transactions.id, id));
@@ -221,12 +231,14 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
 
   return {
     ...txRow,
-    listingAgentName: txRow.listingAgentName ?? null,
-    listingAgentEmail: txRow.listingAgentEmail ?? null,
-    listingAgentPhone: txRow.listingAgentPhone ?? null,
-    sellingAgentName: txRow.sellingAgentName ?? null,
-    sellingAgentEmail: txRow.sellingAgentEmail ?? null,
-    sellingAgentPhone: txRow.sellingAgentPhone ?? null,
+    sellerAgentName: txRow.sellerAgentName ?? null,
+    sellerAgentEmail: txRow.sellerAgentEmail ?? null,
+    sellerAgentPhone: txRow.sellerAgentPhone ?? null,
+    sellerAgentBroker: txRow.sellerAgentBroker ?? null,
+    buyerAgentName: txRow.buyerAgentName ?? null,
+    buyerAgentEmail: txRow.buyerAgentEmail ?? null,
+    buyerAgentPhone: txRow.buyerAgentPhone ?? null,
+    buyerAgentBroker: txRow.buyerAgentBroker ?? null,
     tasks,
     activity: activityRows,
   };
@@ -255,8 +267,10 @@ export async function createTransaction(
       state: n(values.state) ?? 'CA',
       zipCode: n(values.zipCode),
       mlsNumber: n(values.mlsNumber),
-      listingAgentId: n(values.listingAgentId),
-      sellingAgentId: n(values.sellingAgentId),
+      sellerAgentId: n(values.sellerAgentId),
+      sellerAgentIsInHouse: values.sellerAgentIsInHouse ?? false,
+      buyerAgentId: n(values.buyerAgentId),
+      buyerAgentIsInHouse: values.buyerAgentIsInHouse ?? false,
       transactionType: values.transactionType,
       status: values.status,
       propertyType: n(values.propertyType) as Transaction['propertyType'],
@@ -346,8 +360,10 @@ export async function updateTransaction(
         state: n(values.state) ?? 'CA',
         zipCode: n(values.zipCode),
         mlsNumber: n(values.mlsNumber),
-        listingAgentId: n(values.listingAgentId),
-        sellingAgentId: n(values.sellingAgentId),
+        sellerAgentId: n(values.sellerAgentId),
+        sellerAgentIsInHouse: values.sellerAgentIsInHouse ?? false,
+        buyerAgentId: n(values.buyerAgentId),
+        buyerAgentIsInHouse: values.buyerAgentIsInHouse ?? false,
         transactionType: values.transactionType,
         status: values.status,
         propertyType: n(values.propertyType) as Transaction['propertyType'],

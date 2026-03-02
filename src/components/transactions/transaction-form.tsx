@@ -1,10 +1,11 @@
 'use client';
 
+import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { Plus } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -15,6 +16,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -28,9 +30,16 @@ import { transactionSchema } from '@/lib/transaction-schema';
 import type { TransactionFormValues } from '@/lib/transaction-schema';
 import { createTransaction, updateTransaction } from '@/actions/transactions';
 import type { Transaction } from '@/db/schema';
+import { QuickAddAgentDialog } from './quick-add-agent-dialog';
+
+interface AgentOption {
+  id: string;
+  name: string;
+  broker: string | null;
+}
 
 interface TransactionFormProps {
-  agents: { id: string; name: string }[];
+  agents: AgentOption[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Pass to edit an existing transaction. */
@@ -42,9 +51,129 @@ function toFormDollars(cents: number | null | undefined): string {
   return (cents / 100).toString();
 }
 
-export function TransactionForm({ agents, open, onOpenChange, transaction }: TransactionFormProps) {
+// ─── Agent Picker Field ───────────────────────────────────────────────────────
+// Shows a checkbox "In-House" + either a Select (in-house) or a text input (outside).
+
+interface AgentPickerFieldProps {
+  label: string;
+  /** form field names for the two data points */
+  agentIdField: 'sellerAgentId' | 'buyerAgentId';
+  isInHouseField: 'sellerAgentIsInHouse' | 'buyerAgentIsInHouse';
+  agentTextField: 'sellerAgent' | 'buyerAgent';
+  agents: AgentOption[];
+  defaultAgentId?: string | null;
+  defaultIsInHouse?: boolean | null;
+  defaultAgentText?: string | null;
+  setValue: (field: keyof TransactionFormValues, value: string | boolean) => void;
+  register: ReturnType<typeof useForm<TransactionFormValues>>['register'];
+  onAddAgent: (newAgent: AgentOption) => void;
+}
+
+function AgentPickerField({
+  label,
+  agentIdField,
+  isInHouseField,
+  agentTextField,
+  agents,
+  defaultAgentId,
+  defaultIsInHouse,
+  defaultAgentText,
+  setValue,
+  register,
+  onAddAgent,
+}: AgentPickerFieldProps) {
+  const [isInHouse, setIsInHouse] = useState<boolean>(defaultIsInHouse ?? false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+
+  function handleInHouseToggle(checked: boolean) {
+    setIsInHouse(checked);
+    setValue(isInHouseField, checked);
+    if (!checked) {
+      // Clear the FK when switching to outside
+      setValue(agentIdField, '');
+    } else {
+      // Clear text input when switching to in-house
+      setValue(agentTextField, '');
+    }
+  }
+
+  function handleAgentSelect(value: string) {
+    setValue(agentIdField, value === '__none__' ? '' : value);
+  }
+
+  function handleAgentCreated(newAgent: AgentOption) {
+    onAddAgent(newAgent);
+    // Auto-select the newly created agent
+    setValue(agentIdField, newAgent.id);
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label className="text-sm font-medium">{label}</Label>
+        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+          <Checkbox
+            checked={isInHouse}
+            onCheckedChange={(checked) => handleInHouseToggle(checked === true)}
+          />
+          <span className="text-xs text-muted-foreground">In-House</span>
+        </label>
+      </div>
+
+      {isInHouse ? (
+        <div className="flex gap-2">
+          <Select
+            onValueChange={handleAgentSelect}
+            defaultValue={defaultAgentId ?? '__none__'}
+          >
+            <SelectTrigger className="flex-1">
+              <SelectValue placeholder="Select agent..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">— None —</SelectItem>
+              {agents.map((a) => (
+                <SelectItem key={a.id} value={a.id}>
+                  <span>{a.name}</span>
+                  {a.broker && (
+                    <span className="ml-1 text-muted-foreground text-xs">· {a.broker}</span>
+                  )}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => setQuickAddOpen(true)}
+            title="Add new agent"
+          >
+            <Plus className="size-4" />
+          </Button>
+        </div>
+      ) : (
+        <Input
+          {...register(agentTextField)}
+          defaultValue={defaultAgentText ?? ''}
+          placeholder="Agent name (outside brokerage)"
+        />
+      )}
+
+      <QuickAddAgentDialog
+        open={quickAddOpen}
+        onOpenChange={setQuickAddOpen}
+        onAgentCreated={handleAgentCreated}
+      />
+    </div>
+  );
+}
+
+// ─── Main form ────────────────────────────────────────────────────────────────
+
+export function TransactionForm({ agents: initialAgents, open, onOpenChange, transaction }: TransactionFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [agents, setAgents] = useState<AgentOption[]>(initialAgents);
   const isEdit = !!transaction;
 
   const {
@@ -63,8 +192,10 @@ export function TransactionForm({ agents, open, onOpenChange, transaction }: Tra
           state: transaction.state ?? 'CA',
           zipCode: transaction.zipCode ?? '',
           mlsNumber: transaction.mlsNumber ?? '',
-          listingAgentId: transaction.listingAgentId ?? '',
-          sellingAgentId: transaction.sellingAgentId ?? '',
+          sellerAgentId: transaction.sellerAgentId ?? '',
+          sellerAgentIsInHouse: transaction.sellerAgentIsInHouse ?? false,
+          buyerAgentId: transaction.buyerAgentId ?? '',
+          buyerAgentIsInHouse: transaction.buyerAgentIsInHouse ?? false,
           transactionType: transaction.transactionType,
           status: transaction.status,
           propertyType: transaction.propertyType ?? undefined,
@@ -96,10 +227,17 @@ export function TransactionForm({ agents, open, onOpenChange, transaction }: Tra
           loanOfficerEmail: transaction.loanOfficerEmail ?? '',
           notes: transaction.notes ?? '',
         }
-      : { state: 'CA', status: 'pending', transactionType: 'purchase' },
+      : { state: 'CA', status: 'pending', transactionType: 'purchase', sellerAgentIsInHouse: false, buyerAgentIsInHouse: false },
   });
 
   const transactionType = watch('transactionType');
+
+  function handleAgentAdded(newAgent: AgentOption) {
+    setAgents((prev) => {
+      if (prev.find((a) => a.id === newAgent.id)) return prev;
+      return [...prev, newAgent].sort((a, b) => a.name.localeCompare(b.name));
+    });
+  }
 
   function onSubmit(data: TransactionFormValues) {
     startTransition(async () => {
@@ -156,18 +294,18 @@ export function TransactionForm({ agents, open, onOpenChange, transaction }: Tra
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="city">City</Label>
-                <Input id="city" {...register('city')} placeholder="Los Angeles" />
+                <Input id="city" {...register('city')} placeholder="Santa Rosa" />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="zipCode">ZIP</Label>
-                <Input id="zipCode" {...register('zipCode')} placeholder="90210" />
+                <Input id="zipCode" {...register('zipCode')} placeholder="95401" />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="mlsNumber">MLS #</Label>
-                <Input id="mlsNumber" {...register('mlsNumber')} placeholder="ML12345" />
+                <Input id="mlsNumber" {...register('mlsNumber')} placeholder="SN26001" />
               </div>
               <div className="space-y-1.5">
                 <Label>Property Type</Label>
@@ -203,46 +341,6 @@ export function TransactionForm({ agents, open, onOpenChange, transaction }: Tra
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Listing Agent (In-House)</Label>
-                <Select
-                  onValueChange={(v) => setValue('listingAgentId', v === '__none__' ? '' : v)}
-                  defaultValue={transaction?.listingAgentId ?? '__none__'}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Outside / None" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Outside / None</SelectItem>
-                    {agents.map((a) => (
-                      <SelectItem key={a.id} value={a.id}>
-                        {a.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Selling Agent (In-House)</Label>
-                <Select
-                  onValueChange={(v) => setValue('sellingAgentId', v === '__none__' ? '' : v)}
-                  defaultValue={transaction?.sellingAgentId ?? '__none__'}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Outside / None" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Outside / None</SelectItem>
-                    {agents.map((a) => (
-                      <SelectItem key={a.id} value={a.id}>
-                        {a.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
                 <Label>Status</Label>
                 <Select
                   onValueChange={(v) => setValue('status', v as TransactionFormValues['status'])}
@@ -261,26 +359,63 @@ export function TransactionForm({ agents, open, onOpenChange, transaction }: Tra
                   </SelectContent>
                 </Select>
               </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <Label>Transaction Type *</Label>
-              <Select
-                onValueChange={(v) =>
-                  setValue('transactionType', v as TransactionFormValues['transactionType'])
-                }
-                defaultValue={transaction?.transactionType ?? 'purchase'}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="purchase">Purchase</SelectItem>
-                  <SelectItem value="listing">Listing</SelectItem>
-                  <SelectItem value="dual">Dual</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="space-y-1.5">
+                <Label>Transaction Type *</Label>
+                <Select
+                  onValueChange={(v) =>
+                    setValue('transactionType', v as TransactionFormValues['transactionType'])
+                  }
+                  defaultValue={transaction?.transactionType ?? 'purchase'}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="purchase">Purchase</SelectItem>
+                    <SelectItem value="listing">Listing</SelectItem>
+                    <SelectItem value="dual">Dual Agency</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+          </section>
+
+          <Separator />
+
+          {/* ── Agents ───────────────────────────────────── */}
+          <section className="space-y-4">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Agents
+            </p>
+
+            <AgentPickerField
+              label="Seller's Agent"
+              agentIdField="sellerAgentId"
+              isInHouseField="sellerAgentIsInHouse"
+              agentTextField="sellerAgent"
+              agents={agents}
+              defaultAgentId={transaction?.sellerAgentId}
+              defaultIsInHouse={transaction?.sellerAgentIsInHouse ?? false}
+              defaultAgentText={transaction?.sellerAgent}
+              setValue={setValue}
+              register={register}
+              onAddAgent={handleAgentAdded}
+            />
+
+            <AgentPickerField
+              label="Buyer's Agent"
+              agentIdField="buyerAgentId"
+              isInHouseField="buyerAgentIsInHouse"
+              agentTextField="buyerAgent"
+              agents={agents}
+              defaultAgentId={transaction?.buyerAgentId}
+              defaultIsInHouse={transaction?.buyerAgentIsInHouse ?? false}
+              defaultAgentText={transaction?.buyerAgent}
+              setValue={setValue}
+              register={register}
+              onAddAgent={handleAgentAdded}
+            />
           </section>
 
           <Separator />
@@ -290,30 +425,16 @@ export function TransactionForm({ agents, open, onOpenChange, transaction }: Tra
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               Parties
             </p>
-            {(transactionType === 'purchase' || transactionType === 'dual') && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="buyerName">Buyer Name</Label>
-                  <Input id="buyerName" {...register('buyerName')} placeholder="Jane Smith" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="buyerAgent">Buyer&apos;s Agent (Outside)</Label>
-                  <Input id="buyerAgent" {...register('buyerAgent')} placeholder="Agent name" />
-                </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="sellerName">Seller Name</Label>
+                <Input id="sellerName" {...register('sellerName')} placeholder="John Doe" />
               </div>
-            )}
-            {(transactionType === 'listing' || transactionType === 'dual') && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="sellerName">Seller Name</Label>
-                  <Input id="sellerName" {...register('sellerName')} placeholder="John Doe" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="sellerAgent">Seller&apos;s Agent (Outside)</Label>
-                  <Input id="sellerAgent" {...register('sellerAgent')} placeholder="Agent name" />
-                </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="buyerName">Buyer Name</Label>
+                <Input id="buyerName" {...register('buyerName')} placeholder="Jane Smith" />
               </div>
-            )}
+            </div>
           </section>
 
           <Separator />

@@ -29,7 +29,7 @@ const STATUS_OPTIONS = [
 
 export default function TransactionsPage() {
   const [groups, setGroups] = useState<AgentTransactionGroup[]>([]);
-  const [agents, setAgents] = useState<{ id: string; name: string }[]>([]);
+  const [agents, setAgents] = useState<{ id: string; name: string; broker: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState('');

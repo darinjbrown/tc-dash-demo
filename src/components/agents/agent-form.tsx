@@ -22,6 +22,7 @@ const agentFormSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   email: z.string().email('Valid email required'),
   phone: z.string().optional(),
+  broker: z.string().optional(),
   licenseNumber: z.string().optional(),
   brokerageId: z.string().optional(),
 });
@@ -51,6 +52,7 @@ export function AgentForm({ agent, open, onOpenChange, onSuccess }: AgentFormPro
           name: agent.name,
           email: agent.email,
           phone: agent.phone ?? '',
+          broker: agent.broker ?? '',
           licenseNumber: agent.licenseNumber ?? '',
           brokerageId: agent.brokerageId ?? '',
         }
@@ -110,7 +112,7 @@ export function AgentForm({ agent, open, onOpenChange, onSuccess }: AgentFormPro
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="agent-phone">Phone</Label>
-              <Input id="agent-phone" {...register('phone')} placeholder="(555) 000-0000" />
+              <Input id="agent-phone" {...register('phone')} placeholder="(707) 000-0000" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="agent-license">CA DRE License #</Label>
@@ -119,11 +121,20 @@ export function AgentForm({ agent, open, onOpenChange, onSuccess }: AgentFormPro
           </div>
 
           <div className="space-y-1.5">
+            <Label htmlFor="agent-broker">Brokerage Name</Label>
+            <Input
+              id="agent-broker"
+              {...register('broker')}
+              placeholder="e.g. Sonoma Valley Realty"
+            />
+          </div>
+
+          <div className="space-y-1.5">
             <Label htmlFor="agent-brokerage">Brokerage ID</Label>
             <Input
               id="agent-brokerage"
               {...register('brokerageId')}
-              placeholder="Optional brokerage identifier"
+              placeholder="Optional internal identifier"
             />
           </div>
 

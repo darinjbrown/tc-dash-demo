@@ -66,6 +66,7 @@ export const agents = sqliteTable('agents', {
   name: text('name').notNull(),
   email: text('email').notNull(),
   phone: text('phone'),
+  broker: text('broker'), // Brokerage name for display (e.g. "Sonoma Valley Realty")
   licenseNumber: text('license_number'),
   brokerageId: text('brokerage_id'),
   isActive: integer('is_active', { mode: 'boolean' }).default(true).notNull(),
@@ -82,8 +83,12 @@ export const transactions = sqliteTable('transactions', {
   state: text('state').default('CA'),
   zipCode: text('zip_code'),
   mlsNumber: text('mls_number'),
-  listingAgentId: text('listing_agent_id').references(() => agents.id),
-  sellingAgentId: text('selling_agent_id').references(() => agents.id),
+  // sellerAgentId = in-house agent representing the Seller (was listingAgentId)
+  sellerAgentId: text('listing_agent_id').references(() => agents.id),
+  sellerAgentIsInHouse: integer('seller_agent_is_in_house', { mode: 'boolean' }).default(false),
+  // buyerAgentId = in-house agent representing the Buyer (was sellingAgentId)
+  buyerAgentId: text('selling_agent_id').references(() => agents.id),
+  buyerAgentIsInHouse: integer('buyer_agent_is_in_house', { mode: 'boolean' }).default(false),
   transactionType: text('transaction_type', {
     enum: ['listing', 'purchase', 'dual'],
   }).notNull(),
@@ -232,20 +237,20 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
 }));
 
 export const agentsRelations = relations(agents, ({ many }) => ({
-  listingTransactions: many(transactions, { relationName: 'listingAgent' }),
-  sellingTransactions: many(transactions, { relationName: 'sellingAgent' }),
+  sellerTransactions: many(transactions, { relationName: 'sellerAgent' }),
+  buyerTransactions: many(transactions, { relationName: 'buyerAgent' }),
 }));
 
 export const transactionsRelations = relations(transactions, ({ one, many }) => ({
-  listingAgent: one(agents, {
-    fields: [transactions.listingAgentId],
+  sellerAgent: one(agents, {
+    fields: [transactions.sellerAgentId],
     references: [agents.id],
-    relationName: 'listingAgent',
+    relationName: 'sellerAgent',
   }),
-  sellingAgent: one(agents, {
-    fields: [transactions.sellingAgentId],
+  buyerAgent: one(agents, {
+    fields: [transactions.buyerAgentId],
     references: [agents.id],
-    relationName: 'sellingAgent',
+    relationName: 'buyerAgent',
   }),
   tasks: many(transactionTasks),
   activityLog: many(activityLog),

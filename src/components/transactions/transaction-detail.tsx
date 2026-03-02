@@ -13,6 +13,7 @@ import {
   Calendar,
   DollarSign,
   Hash,
+  Building2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
@@ -53,17 +54,34 @@ function ContactCard({
   name,
   phone,
   email,
+  broker,
+  isInHouse,
 }: {
   title: string;
   name?: string | null;
   phone?: string | null;
   email?: string | null;
+  broker?: string | null;
+  isInHouse?: boolean | null;
 }) {
   if (!name && !phone && !email) return null;
   return (
     <div className="rounded-lg border p-3 space-y-1">
-      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{title}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{title}</p>
+        {isInHouse && (
+          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-normal">
+            In-House
+          </Badge>
+        )}
+      </div>
       {name && <p className="text-sm font-medium">{name}</p>}
+      {broker && (
+        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+          <Building2 className="size-3 shrink-0" />
+          {broker}
+        </p>
+      )}
       {phone && (
         <a
           href={`tel:${phone}`}
@@ -117,7 +135,7 @@ function activityDescription(action: string, details: string | null): string {
 
 interface TransactionDetailProps {
   transaction: TxDetail;
-  agents: { id: string; name: string }[];
+  agents: { id: string; name: string; broker: string | null }[];
 }
 
 export function TransactionDetail({ transaction: tx, agents }: TransactionDetailProps) {
@@ -128,6 +146,17 @@ export function TransactionDetail({ transaction: tx, agents }: TransactionDetail
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const statusCfg = STATUS_CONFIG[tx.status] ?? { label: tx.status, className: '' };
+
+  // Determine display name for outside agents
+  const sellerAgentDisplayName = tx.sellerAgentIsInHouse ? tx.sellerAgentName : tx.sellerAgent;
+  const sellerAgentDisplayPhone = tx.sellerAgentIsInHouse ? tx.sellerAgentPhone : null;
+  const sellerAgentDisplayEmail = tx.sellerAgentIsInHouse ? tx.sellerAgentEmail : null;
+  const sellerAgentDisplayBroker = tx.sellerAgentIsInHouse ? tx.sellerAgentBroker : null;
+
+  const buyerAgentDisplayName = tx.buyerAgentIsInHouse ? tx.buyerAgentName : tx.buyerAgent;
+  const buyerAgentDisplayPhone = tx.buyerAgentIsInHouse ? tx.buyerAgentPhone : null;
+  const buyerAgentDisplayEmail = tx.buyerAgentIsInHouse ? tx.buyerAgentEmail : null;
+  const buyerAgentDisplayBroker = tx.buyerAgentIsInHouse ? tx.buyerAgentBroker : null;
 
   function handleStatusChange(status: string) {
     startTransition(async () => {
@@ -161,8 +190,6 @@ export function TransactionDetail({ transaction: tx, agents }: TransactionDetail
       }
     });
   }
-
-  const fullAddress = [tx.address, tx.city, tx.state, tx.zipCode].filter(Boolean).join(', ');
 
   return (
     <>
@@ -344,18 +371,28 @@ export function TransactionDetail({ transaction: tx, agents }: TransactionDetail
                 <h3 className="text-sm font-semibold mb-1">Contacts</h3>
                 <Separator className="mb-3" />
                 <div className="grid gap-3 sm:grid-cols-2">
+                  {/* Parties */}
+                  <ContactCard title="Seller" name={tx.sellerName} />
+                  <ContactCard title="Buyer" name={tx.buyerName} />
+
+                  {/* Agents */}
                   <ContactCard
-                    title="Listing Agent"
-                    name={tx.listingAgentName}
-                    phone={tx.listingAgentPhone}
-                    email={tx.listingAgentEmail}
+                    title="Seller's Agent"
+                    name={sellerAgentDisplayName}
+                    phone={sellerAgentDisplayPhone}
+                    email={sellerAgentDisplayEmail}
+                    broker={sellerAgentDisplayBroker}
+                    isInHouse={tx.sellerAgentIsInHouse}
                   />
                   <ContactCard
-                    title="Selling Agent"
-                    name={tx.sellingAgentName}
-                    phone={tx.sellingAgentPhone}
-                    email={tx.sellingAgentEmail}
+                    title="Buyer's Agent"
+                    name={buyerAgentDisplayName}
+                    phone={buyerAgentDisplayPhone}
+                    email={buyerAgentDisplayEmail}
+                    broker={buyerAgentDisplayBroker}
+                    isInHouse={tx.buyerAgentIsInHouse}
                   />
+
                   <ContactCard
                     title="Escrow Officer"
                     name={tx.escrowOfficer}
@@ -374,15 +411,6 @@ export function TransactionDetail({ transaction: tx, agents }: TransactionDetail
                     phone={tx.loanOfficerPhone}
                     email={tx.loanOfficerEmail}
                   />
-                  <ContactCard
-                    title={tx.transactionType === 'listing' ? 'Seller' : 'Buyer'}
-                    name={tx.transactionType === 'listing' ? tx.sellerName : tx.buyerName}
-                    phone={null}
-                    email={null}
-                  />
-                  {tx.transactionType === 'dual' && (
-                    <ContactCard title="Seller" name={tx.sellerName} phone={null} email={null} />
-                  )}
                 </div>
               </div>
 

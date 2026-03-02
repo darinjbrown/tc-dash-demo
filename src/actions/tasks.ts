@@ -142,8 +142,8 @@ export async function getUpcomingTasks(days = 7): Promise<TaskWithTransaction[]>
       address: transactions.address,
       city: transactions.city,
       agentName: sql<string | null>`coalesce(
-        (select name from agents where agents.id = ${transactions.listingAgentId}),
-        (select name from agents where agents.id = ${transactions.sellingAgentId})
+        (select name from agents where agents.id = ${transactions.sellerAgentId}),
+        (select name from agents where agents.id = ${transactions.buyerAgentId})
       )`,
     })
     .from(transactionTasks)
@@ -177,8 +177,8 @@ export async function getOverdueTasks(): Promise<TaskWithTransaction[]> {
       address: transactions.address,
       city: transactions.city,
       agentName: sql<string | null>`coalesce(
-        (select name from agents where agents.id = ${transactions.listingAgentId}),
-        (select name from agents where agents.id = ${transactions.sellingAgentId})
+        (select name from agents where agents.id = ${transactions.sellerAgentId}),
+        (select name from agents where agents.id = ${transactions.buyerAgentId})
       )`,
     })
     .from(transactionTasks)
@@ -217,8 +217,8 @@ export async function getUpcomingDeadlines(limit = 10): Promise<TaskWithTransact
       address: transactions.address,
       city: transactions.city,
       agentName: sql<string | null>`coalesce(
-        (select name from agents where agents.id = ${transactions.listingAgentId}),
-        (select name from agents where agents.id = ${transactions.sellingAgentId})
+        (select name from agents where agents.id = ${transactions.sellerAgentId}),
+        (select name from agents where agents.id = ${transactions.buyerAgentId})
       )`,
     })
     .from(transactionTasks)
