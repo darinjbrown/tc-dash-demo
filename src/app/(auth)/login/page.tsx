@@ -52,12 +52,13 @@ export default function LoginPage() {
     <div className="w-full max-w-md px-4">
       {/* Brand header */}
       <div className="mb-8 text-center">
-        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xl">
-          TC
-        </div>
-        <h1 className="text-2xl font-bold tracking-tight">{activeBrand.name}</h1>
+        <img
+          src={activeBrand.logo}
+          alt={activeBrand.name}
+          className="mx-auto mb-3 h-16 w-auto object-contain"
+        />
         {activeBrand.tagline && (
-          <p className="mt-1 text-sm text-muted-foreground">{activeBrand.tagline}</p>
+          <p className="text-sm text-muted-foreground">{activeBrand.tagline}</p>
         )}
       </div>
 
