@@ -29,6 +29,7 @@ import {
   LayoutDashboard,
   ArrowLeftRight,
   Users,
+  UserCog,
   Settings,
   ChevronUp,
   LogOut,
@@ -41,6 +42,10 @@ const NAV_ITEMS = [
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
+const ADMIN_NAV_ITEMS = [
+  { href: '/users', label: 'User Management', icon: UserCog },
+];
+
 export function AppSidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
@@ -51,6 +56,7 @@ export function AppSidebar() {
     setMounted(true);
   }, []);
 
+  const isAdmin = session?.user?.role === 'admin';
   const userName = session?.user?.name ?? 'User';
   const userEmail = session?.user?.email ?? '';
   const initials = userName
@@ -92,7 +98,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
+              {[...NAV_ITEMS, ...(isAdmin ? ADMIN_NAV_ITEMS : [])].map(({ href, label, icon: Icon }) => (
                 <SidebarMenuItem key={href}>
                   <SidebarMenuButton asChild isActive={isActive(href)} tooltip={label}>
                     <Link href={href}>

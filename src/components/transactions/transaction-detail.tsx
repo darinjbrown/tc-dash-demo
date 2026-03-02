@@ -69,9 +69,14 @@ function ContactCard({
     <div className="rounded-lg border p-3 space-y-1">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{title}</p>
-        {isInHouse && (
+        {isInHouse === true && (
           <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-normal">
             In-House
+          </Badge>
+        )}
+        {isInHouse === false && (
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+            Outside
           </Badge>
         )}
       </div>
@@ -222,14 +227,14 @@ export function TransactionDetail({ transaction: tx, agents }: TransactionDetail
             {/* Status badge + dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5" disabled={isPending}>
-                  <Badge
-                    variant="outline"
-                    className={cn('text-xs font-normal border-0 p-0', statusCfg.className)}
-                  >
-                    {statusCfg.label}
-                  </Badge>
-                  <span className="text-muted-foreground text-xs">▾</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isPending}
+                  className={cn('gap-1.5 border font-normal', statusCfg.className)}
+                >
+                  {statusCfg.label}
+                  <span className="text-xs opacity-60">▾</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
