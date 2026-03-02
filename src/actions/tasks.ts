@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/db/client';
-import { transactionTasks, transactions, agents, taskTemplates } from '@/db/schema';
+import { transactionTasks, transactions, taskTemplates } from '@/db/schema';
 import type { TaskTemplate } from '@/db/schema';
 import {
   eq,
@@ -16,6 +16,7 @@ import {
   isNotNull,
   asc,
   desc,
+  sql,
 } from 'drizzle-orm';
 import { format, addDays, startOfMonth, endOfMonth } from 'date-fns';
 import { revalidatePath } from 'next/cache';
@@ -140,11 +141,13 @@ export async function getUpcomingTasks(days = 7): Promise<TaskWithTransaction[]>
       transactionId: transactionTasks.transactionId,
       address: transactions.address,
       city: transactions.city,
-      agentName: agents.name,
+      agentName: sql<string | null>`coalesce(
+        (select name from agents where agents.id = ${transactions.listingAgentId}),
+        (select name from agents where agents.id = ${transactions.sellingAgentId})
+      )`,
     })
     .from(transactionTasks)
     .leftJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
-    .leftJoin(agents, eq(transactions.agentId, agents.id))
     .where(
       and(
         isNotNull(transactionTasks.dueDate),
@@ -173,11 +176,13 @@ export async function getOverdueTasks(): Promise<TaskWithTransaction[]> {
       transactionId: transactionTasks.transactionId,
       address: transactions.address,
       city: transactions.city,
-      agentName: agents.name,
+      agentName: sql<string | null>`coalesce(
+        (select name from agents where agents.id = ${transactions.listingAgentId}),
+        (select name from agents where agents.id = ${transactions.sellingAgentId})
+      )`,
     })
     .from(transactionTasks)
     .leftJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
-    .leftJoin(agents, eq(transactions.agentId, agents.id))
     .where(
       or(
         and(
@@ -211,11 +216,13 @@ export async function getUpcomingDeadlines(limit = 10): Promise<TaskWithTransact
       transactionId: transactionTasks.transactionId,
       address: transactions.address,
       city: transactions.city,
-      agentName: agents.name,
+      agentName: sql<string | null>`coalesce(
+        (select name from agents where agents.id = ${transactions.listingAgentId}),
+        (select name from agents where agents.id = ${transactions.sellingAgentId})
+      )`,
     })
     .from(transactionTasks)
     .leftJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
-    .leftJoin(agents, eq(transactions.agentId, agents.id))
     .where(
       and(
         isNotNull(transactionTasks.dueDate),

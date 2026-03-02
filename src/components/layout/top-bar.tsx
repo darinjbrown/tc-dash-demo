@@ -49,6 +49,11 @@ export function TopBar() {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const [commandOpen, setCommandOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Cmd+K / Ctrl+K to open command palette
   useEffect(() => {
@@ -119,20 +124,22 @@ export function TopBar() {
         </div>
       </header>
 
-      <CommandDialog open={commandOpen} onOpenChange={setCommandOpen}>
-        <CommandInput placeholder="Go to a page..." />
-        <CommandList>
-          <CommandEmpty>No results found.</CommandEmpty>
-          <CommandGroup heading="Navigation">
-            {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
-              <CommandItem key={href} onSelect={() => navigate(href)}>
-                <Icon className="size-4" />
-                {label}
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        </CommandList>
-      </CommandDialog>
+      {mounted && (
+        <CommandDialog open={commandOpen} onOpenChange={setCommandOpen}>
+          <CommandInput placeholder="Go to a page..." />
+          <CommandList>
+            <CommandEmpty>No results found.</CommandEmpty>
+            <CommandGroup heading="Navigation">
+              {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
+                <CommandItem key={href} onSelect={() => navigate(href)}>
+                  <Icon className="size-4" />
+                  {label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </CommandDialog>
+      )}
     </>
   );
 }

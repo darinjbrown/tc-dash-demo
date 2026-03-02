@@ -3,7 +3,6 @@
 import { db } from '@/db/client';
 import {
   transactions,
-  agents,
   taskTemplates,
   transactionTasks,
   activityLog,
@@ -26,8 +25,10 @@ export type TransactionSummary = {
   state: string | null;
   zipCode: string | null;
   mlsNumber: string | null;
-  agentId: string | null;
-  agentName: string | null;
+  listingAgentId: string | null;
+  listingAgentName: string | null;
+  sellingAgentId: string | null;
+  sellingAgentName: string | null;
   transactionType: string;
   status: string;
   propertyType: string | null;
@@ -53,9 +54,12 @@ export type ActivityEntry = {
 };
 
 export type TransactionDetail = Transaction & {
-  agentName: string | null;
-  agentEmail: string | null;
-  agentPhone: string | null;
+  listingAgentName: string | null;
+  listingAgentEmail: string | null;
+  listingAgentPhone: string | null;
+  sellingAgentName: string | null;
+  sellingAgentEmail: string | null;
+  sellingAgentPhone: string | null;
   tasks: TransactionTask[];
   activity: ActivityEntry[];
 };
@@ -83,8 +87,10 @@ export async function getTransactions(): Promise<AgentTransactionGroup[]> {
       state: transactions.state,
       zipCode: transactions.zipCode,
       mlsNumber: transactions.mlsNumber,
-      agentId: transactions.agentId,
-      agentName: agents.name,
+      listingAgentId: transactions.listingAgentId,
+      listingAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.listingAgentId})`,
+      sellingAgentId: transactions.sellingAgentId,
+      sellingAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.sellingAgentId})`,
       transactionType: transactions.transactionType,
       status: transactions.status,
       propertyType: transactions.propertyType,
@@ -93,8 +99,7 @@ export async function getTransactions(): Promise<AgentTransactionGroup[]> {
       expectedCloseDate: transactions.expectedCloseDate,
     })
     .from(transactions)
-    .leftJoin(agents, eq(transactions.agentId, agents.id))
-    .orderBy(asc(agents.name), desc(transactions.createdAt));
+    .orderBy(desc(transactions.createdAt));
 
   if (rows.length === 0) return [];
 
@@ -115,7 +120,6 @@ export async function getTransactions(): Promise<AgentTransactionGroup[]> {
     const counts = countMap.get(r.id) ?? { total: 0, completed: 0 };
     return {
       ...r,
-      agentName: r.agentName ?? null,
       totalTasks: counts.total,
       completedTasks: Number(counts.completed),
     };
@@ -125,9 +129,12 @@ export async function getTransactions(): Promise<AgentTransactionGroup[]> {
   const ungroupedKey = '__none__';
 
   for (const s of summaries) {
-    const key = s.agentId ?? ungroupedKey;
+    // Group by listing agent first, fall back to selling agent
+    const primaryId = s.listingAgentId ?? s.sellingAgentId;
+    const primaryName = s.listingAgentId ? s.listingAgentName : s.sellingAgentName;
+    const key = primaryId ?? ungroupedKey;
     if (!groupMap.has(key)) {
-      groupMap.set(key, { agentId: s.agentId, agentName: s.agentName, transactions: [] });
+      groupMap.set(key, { agentId: primaryId, agentName: primaryName, transactions: [] });
     }
     groupMap.get(key)!.transactions.push(s);
   }
@@ -144,7 +151,8 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
       state: transactions.state,
       zipCode: transactions.zipCode,
       mlsNumber: transactions.mlsNumber,
-      agentId: transactions.agentId,
+      listingAgentId: transactions.listingAgentId,
+      sellingAgentId: transactions.sellingAgentId,
       transactionType: transactions.transactionType,
       status: transactions.status,
       propertyType: transactions.propertyType,
@@ -178,12 +186,14 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
       createdBy: transactions.createdBy,
       createdAt: transactions.createdAt,
       updatedAt: transactions.updatedAt,
-      agentName: agents.name,
-      agentEmail: agents.email,
-      agentPhone: agents.phone,
+      listingAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.listingAgentId})`,
+      listingAgentEmail: sql<string | null>`(select email from agents where agents.id = ${transactions.listingAgentId})`,
+      listingAgentPhone: sql<string | null>`(select phone from agents where agents.id = ${transactions.listingAgentId})`,
+      sellingAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.sellingAgentId})`,
+      sellingAgentEmail: sql<string | null>`(select email from agents where agents.id = ${transactions.sellingAgentId})`,
+      sellingAgentPhone: sql<string | null>`(select phone from agents where agents.id = ${transactions.sellingAgentId})`,
     })
     .from(transactions)
-    .leftJoin(agents, eq(transactions.agentId, agents.id))
     .where(eq(transactions.id, id));
 
   if (!txRow) return null;
@@ -211,9 +221,12 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
 
   return {
     ...txRow,
-    agentName: txRow.agentName ?? null,
-    agentEmail: txRow.agentEmail ?? null,
-    agentPhone: txRow.agentPhone ?? null,
+    listingAgentName: txRow.listingAgentName ?? null,
+    listingAgentEmail: txRow.listingAgentEmail ?? null,
+    listingAgentPhone: txRow.listingAgentPhone ?? null,
+    sellingAgentName: txRow.sellingAgentName ?? null,
+    sellingAgentEmail: txRow.sellingAgentEmail ?? null,
+    sellingAgentPhone: txRow.sellingAgentPhone ?? null,
     tasks,
     activity: activityRows,
   };
@@ -242,7 +255,8 @@ export async function createTransaction(
       state: n(values.state) ?? 'CA',
       zipCode: n(values.zipCode),
       mlsNumber: n(values.mlsNumber),
-      agentId: values.agentId,
+      listingAgentId: n(values.listingAgentId),
+      sellingAgentId: n(values.sellingAgentId),
       transactionType: values.transactionType,
       status: values.status,
       propertyType: n(values.propertyType) as Transaction['propertyType'],
@@ -332,7 +346,8 @@ export async function updateTransaction(
         state: n(values.state) ?? 'CA',
         zipCode: n(values.zipCode),
         mlsNumber: n(values.mlsNumber),
-        agentId: values.agentId,
+        listingAgentId: n(values.listingAgentId),
+        sellingAgentId: n(values.sellingAgentId),
         transactionType: values.transactionType,
         status: values.status,
         propertyType: n(values.propertyType) as Transaction['propertyType'],

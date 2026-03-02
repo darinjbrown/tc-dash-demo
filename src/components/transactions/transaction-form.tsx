@@ -63,7 +63,8 @@ export function TransactionForm({ agents, open, onOpenChange, transaction }: Tra
           state: transaction.state ?? 'CA',
           zipCode: transaction.zipCode ?? '',
           mlsNumber: transaction.mlsNumber ?? '',
-          agentId: transaction.agentId ?? '',
+          listingAgentId: transaction.listingAgentId ?? '',
+          sellingAgentId: transaction.sellingAgentId ?? '',
           transactionType: transaction.transactionType,
           status: transaction.status,
           propertyType: transaction.propertyType ?? undefined,
@@ -202,15 +203,16 @@ export function TransactionForm({ agents, open, onOpenChange, transaction }: Tra
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Agent *</Label>
+                <Label>Listing Agent (In-House)</Label>
                 <Select
-                  onValueChange={(v) => setValue('agentId', v)}
-                  defaultValue={transaction?.agentId ?? undefined}
+                  onValueChange={(v) => setValue('listingAgentId', v === '__none__' ? '' : v)}
+                  defaultValue={transaction?.listingAgentId ?? '__none__'}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select agent" />
+                    <SelectValue placeholder="Outside / None" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="__none__">Outside / None</SelectItem>
                     {agents.map((a) => (
                       <SelectItem key={a.id} value={a.id}>
                         {a.name}
@@ -218,9 +220,26 @@ export function TransactionForm({ agents, open, onOpenChange, transaction }: Tra
                     ))}
                   </SelectContent>
                 </Select>
-                {errors.agentId && (
-                  <p className="text-xs text-destructive">{errors.agentId.message}</p>
-                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Selling Agent (In-House)</Label>
+                <Select
+                  onValueChange={(v) => setValue('sellingAgentId', v === '__none__' ? '' : v)}
+                  defaultValue={transaction?.sellingAgentId ?? '__none__'}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Outside / None" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Outside / None</SelectItem>
+                    {agents.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-1.5">
@@ -278,7 +297,7 @@ export function TransactionForm({ agents, open, onOpenChange, transaction }: Tra
                   <Input id="buyerName" {...register('buyerName')} placeholder="Jane Smith" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="buyerAgent">Buyer&apos;s Agent</Label>
+                  <Label htmlFor="buyerAgent">Buyer&apos;s Agent (Outside)</Label>
                   <Input id="buyerAgent" {...register('buyerAgent')} placeholder="Agent name" />
                 </div>
               </div>
@@ -290,7 +309,7 @@ export function TransactionForm({ agents, open, onOpenChange, transaction }: Tra
                   <Input id="sellerName" {...register('sellerName')} placeholder="John Doe" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="sellerAgent">Seller&apos;s Agent</Label>
+                  <Label htmlFor="sellerAgent">Seller&apos;s Agent (Outside)</Label>
                   <Input id="sellerAgent" {...register('sellerAgent')} placeholder="Agent name" />
                 </div>
               </div>

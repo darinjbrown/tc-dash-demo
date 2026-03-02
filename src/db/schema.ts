@@ -82,7 +82,8 @@ export const transactions = sqliteTable('transactions', {
   state: text('state').default('CA'),
   zipCode: text('zip_code'),
   mlsNumber: text('mls_number'),
-  agentId: text('agent_id').references(() => agents.id),
+  listingAgentId: text('listing_agent_id').references(() => agents.id),
+  sellingAgentId: text('selling_agent_id').references(() => agents.id),
   transactionType: text('transaction_type', {
     enum: ['listing', 'purchase', 'dual'],
   }).notNull(),
@@ -231,11 +232,21 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
 }));
 
 export const agentsRelations = relations(agents, ({ many }) => ({
-  transactions: many(transactions),
+  listingTransactions: many(transactions, { relationName: 'listingAgent' }),
+  sellingTransactions: many(transactions, { relationName: 'sellingAgent' }),
 }));
 
 export const transactionsRelations = relations(transactions, ({ one, many }) => ({
-  agent: one(agents, { fields: [transactions.agentId], references: [agents.id] }),
+  listingAgent: one(agents, {
+    fields: [transactions.listingAgentId],
+    references: [agents.id],
+    relationName: 'listingAgent',
+  }),
+  sellingAgent: one(agents, {
+    fields: [transactions.sellingAgentId],
+    references: [agents.id],
+    relationName: 'sellingAgent',
+  }),
   tasks: many(transactionTasks),
   activityLog: many(activityLog),
 }));

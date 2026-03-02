@@ -3,7 +3,7 @@
 import { db } from '@/db/client';
 import { agents, transactions } from '@/db/schema';
 import type { Agent } from '@/db/schema';
-import { eq, asc, count } from 'drizzle-orm';
+import { eq, asc, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
@@ -42,11 +42,12 @@ export async function getAgents(): Promise<AgentWithStats[]> {
       isActive: agents.isActive,
       createdAt: agents.createdAt,
       updatedAt: agents.updatedAt,
-      transactionCount: count(transactions.id),
+      transactionCount: sql<number>`(
+        select count(distinct t.id) from transactions t
+        where t.listing_agent_id = ${agents.id} or t.selling_agent_id = ${agents.id}
+      )`,
     })
     .from(agents)
-    .leftJoin(transactions, eq(transactions.agentId, agents.id))
-    .groupBy(agents.id)
     .orderBy(asc(agents.name));
 
   return rows;

@@ -345,10 +345,16 @@ export function TransactionDetail({ transaction: tx, agents }: TransactionDetail
                 <Separator className="mb-3" />
                 <div className="grid gap-3 sm:grid-cols-2">
                   <ContactCard
-                    title="Agent"
-                    name={tx.agentName}
-                    phone={tx.agentPhone}
-                    email={tx.agentEmail}
+                    title="Listing Agent"
+                    name={tx.listingAgentName}
+                    phone={tx.listingAgentPhone}
+                    email={tx.listingAgentEmail}
+                  />
+                  <ContactCard
+                    title="Selling Agent"
+                    name={tx.sellingAgentName}
+                    phone={tx.sellingAgentPhone}
+                    email={tx.sellingAgentEmail}
                   />
                   <ContactCard
                     title="Escrow Officer"
