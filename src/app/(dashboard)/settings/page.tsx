@@ -1,22 +1,29 @@
-import { BrandToggle } from './_components/brand-toggle';
+import { auth } from '@/lib/auth';
+import { getTaskTemplates } from '@/actions/tasks';
+import { SettingsTabs } from './_components/settings-tabs';
+import { redirect } from 'next/navigation';
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const session = await auth();
+  if (!session?.user) redirect('/login');
+
+  const templates = await getTaskTemplates();
+
+  const user = {
+    name: session.user.name ?? null,
+    email: session.user.email ?? '',
+  };
+
   return (
-    <main className="p-6 max-w-2xl">
-      <h1 className="text-2xl font-bold">Settings</h1>
-      <p className="text-muted-foreground mt-1 mb-8">
-        Full settings — coming in Phase 11.
-      </p>
-
-      <section className="rounded-lg border p-6">
-        <h2 className="text-lg font-semibold mb-1">Branding (Temporary Test)</h2>
-        <p className="text-sm text-muted-foreground mb-4">
-          Toggle between brand configs to verify the rebranding system. In production,
-          change <code className="bg-muted px-1 rounded text-xs">activeBrand</code> in{' '}
-          <code className="bg-muted px-1 rounded text-xs">src/lib/brand-config.ts</code>.
+    <div className="p-4 sm:p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Manage your profile, task templates, and branding.
         </p>
-        <BrandToggle />
-      </section>
-    </main>
+      </div>
+
+      <SettingsTabs user={user} templates={templates} />
+    </div>
   );
 }

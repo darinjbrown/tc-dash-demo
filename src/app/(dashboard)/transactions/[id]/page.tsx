@@ -1,8 +1,27 @@
-export default function TransactionDetailPage({ params }: { params: { id: string } }) {
+import { notFound } from 'next/navigation';
+import { getTransactionById } from '@/actions/transactions';
+import { getAgentsForSelect } from '@/actions/agents';
+import { TransactionDetail } from '@/components/transactions/transaction-detail';
+
+interface TransactionDetailPageProps {
+  params: Promise<{ id: string }>;
+}
+
+export default async function TransactionDetailPage({ params }: TransactionDetailPageProps) {
+  const { id } = await params;
+
+  const [transaction, agents] = await Promise.all([
+    getTransactionById(id),
+    getAgentsForSelect(),
+  ]);
+
+  if (!transaction) {
+    notFound();
+  }
+
   return (
-    <main className="p-6">
-      <h1 className="text-2xl font-bold">Transaction {params.id}</h1>
-      <p className="text-muted-foreground mt-2">Transaction detail — coming in Phase 9</p>
-    </main>
-  )
+    <div className="p-4 sm:p-6">
+      <TransactionDetail transaction={transaction} agents={agents} />
+    </div>
+  );
 }
