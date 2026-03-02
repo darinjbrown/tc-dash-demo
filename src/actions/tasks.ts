@@ -95,7 +95,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
           and(
             isNotNull(transactionTasks.dueDate),
             lt(transactionTasks.dueDate, today),
-            inArray(transactionTasks.status, ['pending', 'in_progress']),
+            inArray(transactionTasks.status, ['pending', 'in_progress', 'overdue']),
           ),
           and(
             eq(transactionTasks.priority, 'urgent'),
@@ -188,7 +188,7 @@ export async function getOverdueTasks(): Promise<TaskWithTransaction[]> {
         and(
           isNotNull(transactionTasks.dueDate),
           lt(transactionTasks.dueDate, today),
-          inArray(transactionTasks.status, ['pending', 'in_progress']),
+          inArray(transactionTasks.status, ['pending', 'in_progress', 'overdue']),
         ),
         and(
           eq(transactionTasks.priority, 'urgent'),
