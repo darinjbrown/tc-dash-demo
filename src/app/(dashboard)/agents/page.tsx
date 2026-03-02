@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
-import { Plus, Pencil, ToggleLeft, ToggleRight, Phone, Mail, Hash, Building2 } from 'lucide-react';
+import { Plus, Pencil, ToggleLeft, ToggleRight, Phone, Mail, Hash, Building2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,8 +14,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { AgentForm } from '@/components/agents/agent-form';
-import { getAgents, toggleAgentActive } from '@/actions/agents';
+import { getAgents, toggleAgentActive, deleteAgent } from '@/actions/agents';
 import type { AgentWithStats } from '@/actions/agents';
 
 export default function AgentsPage() {
@@ -23,6 +33,7 @@ export default function AgentsPage() {
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AgentWithStats | null>(null);
+  const [deletingAgent, setDeletingAgent] = useState<AgentWithStats | null>(null);
   const [, startTransition] = useTransition();
 
   async function loadAgents() {
@@ -48,6 +59,19 @@ export default function AgentsPage() {
   function handleFormSuccess() {
     setLoading(true);
     loadAgents();
+  }
+
+  function handleDelete(agent: AgentWithStats) {
+    startTransition(async () => {
+      const result = await deleteAgent(agent.id);
+      if (result.success) {
+        toast.success(`${agent.name} deleted`);
+        handleFormSuccess();
+      } else {
+        toast.error(result.error ?? 'Failed to delete agent');
+      }
+      setDeletingAgent(null);
+    });
   }
 
   function handleToggleActive(agent: AgentWithStats) {
@@ -192,6 +216,21 @@ export default function AgentsPage() {
                           {agent.isActive ? 'Deactivate' : 'Activate'}
                         </span>
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 px-2 text-destructive hover:text-destructive"
+                        onClick={() => setDeletingAgent(agent)}
+                        disabled={agent.transactionCount > 0}
+                        title={
+                          agent.transactionCount > 0
+                            ? 'Cannot delete — agent has linked transactions'
+                            : 'Delete agent'
+                        }
+                      >
+                        <Trash2 className="size-3.5" />
+                        <span className="sr-only">Delete</span>
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -207,6 +246,26 @@ export default function AgentsPage() {
         onOpenChange={setFormOpen}
         onSuccess={handleFormSuccess}
       />
+
+      <AlertDialog open={!!deletingAgent} onOpenChange={(open) => !open && setDeletingAgent(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deletingAgent?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the agent and cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deletingAgent && handleDelete(deletingAgent)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
