@@ -3,7 +3,7 @@
 import { db } from '@/db/client';
 import { agents, transactions } from '@/db/schema';
 import type { Agent } from '@/db/schema';
-import { eq, asc, sql } from 'drizzle-orm';
+import { eq, asc, sql, or } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
@@ -121,6 +121,33 @@ export async function updateAgent(
     return { success: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to update agent';
+    return { success: false, error: message };
+  }
+}
+
+export async function deleteAgent(
+  id: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Block delete if agent is linked to any transactions
+    const linked = await db
+      .select({ id: transactions.id })
+      .from(transactions)
+      .where(or(eq(transactions.sellerAgentId, id), eq(transactions.buyerAgentId, id)))
+      .limit(1);
+
+    if (linked.length > 0) {
+      return {
+        success: false,
+        error: 'Agent has linked transactions. Deactivate them instead.',
+      };
+    }
+
+    await db.delete(agents).where(eq(agents.id, id));
+    revalidatePath('/agents');
+    return { success: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to delete agent';
     return { success: false, error: message };
   }
 }

@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { activeBrand } from '@/lib/brand-config';
+import { RequestAccessDialog } from '@/components/auth/request-access-dialog';
 
 const loginSchema = z.object({
   email: z.email('Enter a valid email address'),
@@ -22,6 +23,7 @@ type LoginForm = z.infer<typeof loginSchema>;
 export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [requestOpen, setRequestOpen] = useState(false);
 
   const {
     register,
@@ -111,6 +113,19 @@ export default function LoginPage() {
           </form>
         </CardContent>
       </Card>
+
+      <p className="mt-4 text-center text-sm text-muted-foreground">
+        Don&apos;t have an account?{' '}
+        <button
+          type="button"
+          onClick={() => setRequestOpen(true)}
+          className="underline underline-offset-4 hover:text-foreground transition-colors"
+        >
+          Request access
+        </button>
+      </p>
+
+      <RequestAccessDialog open={requestOpen} onOpenChange={setRequestOpen} />
     </div>
   );
 }
