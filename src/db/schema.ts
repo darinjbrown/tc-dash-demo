@@ -218,6 +218,18 @@ export const activityLog = sqliteTable('activity_log', {
     .$defaultFn(() => new Date()),
 });
 
+export const accessRequests = sqliteTable('access_requests', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  email: text('email').notNull(),
+  phone: text('phone').notNull(),
+  address: text('address').notNull(),
+  company: text('company').notNull(),
+  note: text('note'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
+    .$defaultFn(() => new Date()),
+});
+
 // ============================================================
 // Relations
 // ============================================================
@@ -292,3 +304,4 @@ export type TransactionTask = typeof transactionTasks.$inferSelect;
 export type NewTransactionTask = typeof transactionTasks.$inferInsert;
 export type ActivityLog = typeof activityLog.$inferSelect;
 export type NewActivityLog = typeof activityLog.$inferInsert;
+export type AccessRequest = typeof accessRequests.$inferSelect;

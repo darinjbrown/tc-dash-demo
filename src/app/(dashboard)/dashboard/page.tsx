@@ -6,16 +6,19 @@ import {
   getOverdueTasks,
   getUpcomingDeadlines,
 } from '@/actions/tasks';
+import { getPendingRequests } from '@/actions/access-requests';
 import { StatsCards } from '@/components/dashboard/stats-cards';
 import { TodoList } from '@/components/dashboard/todo-list';
 import { UpcomingDeadlines } from '@/components/dashboard/upcoming-deadlines';
+import { PendingRequestsCard } from '@/components/dashboard/pending-requests-card';
 
 export default async function DashboardPage() {
-  const [stats, upcomingTasks, overdueTasks, deadlines] = await Promise.all([
+  const [stats, upcomingTasks, overdueTasks, deadlines, pendingRequests] = await Promise.all([
     getDashboardStats(),
     getUpcomingTasks(7),
     getOverdueTasks(),
     getUpcomingDeadlines(10),
+    getPendingRequests(),
   ]);
 
   return (
@@ -26,6 +29,10 @@ export default async function DashboardPage() {
           Here&apos;s what needs your attention today.
         </p>
       </div>
+
+      {pendingRequests.length > 0 && (
+        <PendingRequestsCard initialRequests={pendingRequests} />
+      )}
 
       <StatsCards stats={stats} />
 
