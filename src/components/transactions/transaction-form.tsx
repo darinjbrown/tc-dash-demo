@@ -180,7 +180,6 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
     register,
     handleSubmit,
     setValue,
-    watch,
     reset,
     formState: { errors },
   } = useForm<TransactionFormValues>({
@@ -230,8 +229,6 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
       : { state: 'CA', status: 'pending', transactionType: 'purchase', sellerAgentIsInHouse: false, buyerAgentIsInHouse: false },
   });
 
-  const transactionType = watch('transactionType');
-
   function handleAgentAdded(newAgent: AgentOption) {
     setAgents((prev) => {
       if (prev.find((a) => a.id === newAgent.id)) return prev;
@@ -276,7 +273,7 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
           <SheetTitle>{isEdit ? 'Edit Transaction' : 'New Transaction'}</SheetTitle>
         </SheetHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 pb-8">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 px-4 pb-8">
           {/* ── Property ─────────────────────────────────── */}
           <section className="space-y-3">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
