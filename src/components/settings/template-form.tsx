@@ -42,6 +42,7 @@ const templateFormSchema = z.object({
     'title',
     'closing',
     'post_closing',
+    'listing',
   ]),
   transactionType: z.enum(['listing', 'purchase', 'both']),
   relativeDueDays: z.number().int(),
@@ -52,6 +53,7 @@ const templateFormSchema = z.object({
     'inspection_contingency_date',
     'appraisal_contingency_date',
     'loan_contingency_date',
+    'listing_active_date',
   ]),
   sortOrder: z.number().int().min(0),
   isRequired: z.boolean(),
@@ -61,6 +63,7 @@ const templateFormSchema = z.object({
 type FormValues = z.infer<typeof templateFormSchema>;
 
 const CATEGORIES = [
+  { value: 'listing', label: 'Listing' },
   { value: 'pre_escrow', label: 'Pre-Escrow' },
   { value: 'opening', label: 'Opening' },
   { value: 'disclosures', label: 'Disclosures' },
@@ -74,6 +77,7 @@ const CATEGORIES = [
 ];
 
 const RELATIVE_TO_OPTIONS = [
+  { value: 'listing_active_date', label: 'Listing Active Date' },
   { value: 'acceptance_date', label: 'Acceptance Date' },
   { value: 'escrow_open', label: 'Escrow Open Date' },
   { value: 'expected_close_date', label: 'Expected Close Date' },

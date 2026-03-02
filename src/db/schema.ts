@@ -123,6 +123,7 @@ export const transactions = sqliteTable('transactions', {
   // Dates stored as ISO strings
   acceptanceDate: text('acceptance_date'),
   escrowOpenDate: text('escrow_open_date'),
+  listingActiveDate: text('listing_active_date'),
   inspectionContingencyDate: text('inspection_contingency_date'),
   appraisalContingencyDate: text('appraisal_contingency_date'),
   loanContingencyDate: text('loan_contingency_date'),
@@ -152,6 +153,7 @@ export const taskTemplates = sqliteTable('task_templates', {
       'title',
       'closing',
       'post_closing',
+      'listing',
     ],
   }).notNull(),
   transactionType: text('transaction_type', {
@@ -169,6 +171,7 @@ export const taskTemplates = sqliteTable('task_templates', {
       'inspection_contingency_date',
       'appraisal_contingency_date',
       'loan_contingency_date',
+      'listing_active_date',
     ],
   })
     .default('escrow_open')

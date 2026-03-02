@@ -39,6 +39,7 @@ export const transactionSchema = z.object({
   // Dates as ISO strings (YYYY-MM-DD)
   acceptanceDate: z.string().optional(),
   escrowOpenDate: z.string().optional(),
+  listingActiveDate: z.string().optional(),
   inspectionContingencyDate: z.string().optional(),
   appraisalContingencyDate: z.string().optional(),
   loanContingencyDate: z.string().optional(),

@@ -16,6 +16,8 @@ function getMilestoneDate(tx: Transaction, relativeTo: string): string | null {
       return tx.appraisalContingencyDate ?? null;
     case 'loan_contingency_date':
       return tx.loanContingencyDate ?? null;
+    case 'listing_active_date':
+      return tx.listingActiveDate ?? null;
     default:
       return null;
   }

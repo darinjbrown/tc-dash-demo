@@ -159,6 +159,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   title: 'Title',
   closing: 'Closing',
   post_closing: 'Post-Closing',
+  listing: 'Listing',
 };
 
 const RELATIVE_TO_LABELS: Record<string, string> = {
@@ -168,6 +169,7 @@ const RELATIVE_TO_LABELS: Record<string, string> = {
   inspection_contingency_date: 'Inspection Contingency',
   appraisal_contingency_date: 'Appraisal Contingency',
   loan_contingency_date: 'Loan Contingency',
+  listing_active_date: 'Listing Active',
 };
 
 function TemplatesTab({ initialTemplates }: { initialTemplates: TaskTemplate[] }) {

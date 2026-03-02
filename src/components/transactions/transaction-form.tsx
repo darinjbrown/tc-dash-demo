@@ -181,6 +181,7 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
     register,
     handleSubmit,
     setValue,
+    watch,
     reset,
     formState: { errors },
   } = useForm<TransactionFormValues>({
@@ -209,6 +210,7 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
           commissionPercent: transaction.commissionPercent ?? '',
           acceptanceDate: transaction.acceptanceDate ?? '',
           escrowOpenDate: transaction.escrowOpenDate ?? '',
+          listingActiveDate: transaction.listingActiveDate ?? '',
           inspectionContingencyDate: transaction.inspectionContingencyDate ?? '',
           appraisalContingencyDate: transaction.appraisalContingencyDate ?? '',
           loanContingencyDate: transaction.loanContingencyDate ?? '',
@@ -229,6 +231,9 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
         }
       : { state: 'CA', status: 'pending', transactionType: 'purchase', sellerAgentIsInHouse: false, buyerAgentIsInHouse: false },
   });
+
+  const transactionType = watch('transactionType');
+  const isListing = transactionType === 'listing' || transactionType === 'dual';
 
   function handleAgentAdded(newAgent: AgentOption) {
     setAgents((prev) => {
@@ -451,6 +456,12 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
                 <Label htmlFor="escrowOpenDate">Escrow Open</Label>
                 <Input id="escrowOpenDate" type="date" {...register('escrowOpenDate')} />
               </div>
+              {isListing && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="listingActiveDate">Listing Active Date</Label>
+                  <Input id="listingActiveDate" type="date" {...register('listingActiveDate')} />
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label htmlFor="expectedCloseDate">Expected Close</Label>
                 <Input id="expectedCloseDate" type="date" {...register('expectedCloseDate')} />
