@@ -1,5 +1,4 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CalendarClock, CalendarCheck, AlertTriangle, CalendarRange } from 'lucide-react';
 import type { DashboardStats } from '@/actions/tasks';
 import { cn } from '@/lib/utils';
 
@@ -12,7 +11,6 @@ export function StatsCards({ stats }: StatsCardsProps) {
     {
       title: 'Overdue Tasks',
       value: stats.overdueTasks,
-      icon: AlertTriangle,
       description: 'Past due or urgent',
       valueClass: stats.overdueTasks > 0 ? 'text-destructive' : '',
       cardClass: stats.overdueTasks > 0 ? 'border-destructive/40' : '',
@@ -20,7 +18,6 @@ export function StatsCards({ stats }: StatsCardsProps) {
     {
       title: 'Due Today',
       value: stats.tasksDueToday,
-      icon: CalendarClock,
       description: 'Tasks due today',
       valueClass: stats.tasksDueToday > 0 ? 'text-amber-600 dark:text-amber-400' : '',
       cardClass: stats.tasksDueToday > 0 ? 'border-amber-400/40' : '',
@@ -28,7 +25,6 @@ export function StatsCards({ stats }: StatsCardsProps) {
     {
       title: 'Due This Week',
       value: stats.tasksDueThisWeek,
-      icon: CalendarCheck,
       description: 'Tasks due in the next 7 days',
       valueClass: '',
       cardClass: '',
@@ -36,7 +32,6 @@ export function StatsCards({ stats }: StatsCardsProps) {
     {
       title: 'Closing in 30 Days',
       value: stats.closingNext30Days,
-      icon: CalendarRange,
       description: 'Expected to close within 30 days',
       valueClass: '',
       cardClass: '',
@@ -46,16 +41,14 @@ export function StatsCards({ stats }: StatsCardsProps) {
   return (
     <div className="grid gap-4 grid-cols-2">
       {cards.map((card) => {
-        const Icon = card.icon;
         return (
           <Card key={card.title} className={cn(card.cardClass)}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardHeader className="pb-2 space-y-0">
               <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
-              <Icon className="size-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className={cn('text-2xl font-bold', card.valueClass)}>{card.value}</div>
-              <p className="text-xs text-muted-foreground mt-1">{card.description}</p>
+              <p className="text-sm text-muted-foreground mt-1">{card.description}</p>
             </CardContent>
           </Card>
         );

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Activity, ChevronDown, ChevronUp, CheckSquare } from 'lucide-react';
+import { ChevronDown, ChevronUp, CheckSquare } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import Link from 'next/link';
 import { Progress } from '@/components/ui/progress';
@@ -46,9 +46,8 @@ export function ActiveTransactionsCard({ transactions, collapsedHeight }: Active
       className="flex flex-col overflow-hidden"
       style={!expanded && collapsedHeight ? { height: collapsedHeight } : undefined}
     >
-      <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0 shrink-0">
+      <CardHeader className="pb-2 space-y-0 shrink-0">
         <CardTitle className="text-sm font-medium">Active Transactions</CardTitle>
-        <Activity className="size-4 text-muted-foreground" />
       </CardHeader>
 
       <CardContent className="flex flex-col flex-1 min-h-0 pb-3">
@@ -87,11 +86,11 @@ export function ActiveTransactionsCard({ transactions, collapsedHeight }: Active
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-sm truncate">{tx.address}</span>
                           {tx.city && (
-                            <span className="text-xs text-muted-foreground shrink-0">{tx.city}</span>
+                            <span className="text-sm text-muted-foreground shrink-0">{tx.city}</span>
                           )}
                         </div>
                         {agents && (
-                          <p className="text-xs text-muted-foreground mt-0.5 truncate">{agents}</p>
+                          <p className="text-sm text-muted-foreground mt-0.5 truncate">{agents}</p>
                         )}
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
@@ -102,7 +101,7 @@ export function ActiveTransactionsCard({ transactions, collapsedHeight }: Active
                           {TYPE_LABELS[tx.transactionType] ?? tx.transactionType}
                         </Badge>
                         {closeDate && (
-                          <span className="text-xs text-muted-foreground">Closes {closeDate}</span>
+                          <span className="text-sm text-muted-foreground">Closes {closeDate}</span>
                         )}
                       </div>
                     </div>
