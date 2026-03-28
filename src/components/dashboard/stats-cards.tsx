@@ -10,6 +10,14 @@ interface StatsCardsProps {
 export function StatsCards({ stats }: StatsCardsProps) {
   const cards = [
     {
+      title: 'Overdue Tasks',
+      value: stats.overdueTasks,
+      icon: AlertTriangle,
+      description: 'Past due or urgent',
+      valueClass: stats.overdueTasks > 0 ? 'text-destructive' : '',
+      cardClass: stats.overdueTasks > 0 ? 'border-destructive/40' : '',
+    },
+    {
       title: 'Due Today',
       value: stats.tasksDueToday,
       icon: CalendarClock,
@@ -24,14 +32,6 @@ export function StatsCards({ stats }: StatsCardsProps) {
       description: 'Tasks due in the next 7 days',
       valueClass: '',
       cardClass: '',
-    },
-    {
-      title: 'Overdue Tasks',
-      value: stats.overdueTasks,
-      icon: AlertTriangle,
-      description: 'Past due or urgent',
-      valueClass: stats.overdueTasks > 0 ? 'text-destructive' : '',
-      cardClass: stats.overdueTasks > 0 ? 'border-destructive/40' : '',
     },
     {
       title: 'Closing in 30 Days',
