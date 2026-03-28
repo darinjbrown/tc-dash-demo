@@ -20,7 +20,7 @@ import {
   desc,
   sql,
 } from 'drizzle-orm';
-import { format, addDays, startOfMonth, endOfMonth } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
@@ -39,10 +39,10 @@ export type TaskWithTransaction = {
 };
 
 export type DashboardStats = {
-  activeTransactions: number;
+  tasksDueToday: number;
   tasksDueThisWeek: number;
   overdueTasks: number;
-  closingThisMonth: number;
+  closingNext30Days: number;
 };
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -55,27 +55,24 @@ function daysFromNowStr(days: number) {
   return format(addDays(new Date(), days), 'yyyy-MM-dd');
 }
 
-function startOfMonthStr() {
-  return format(startOfMonth(new Date()), 'yyyy-MM-dd');
-}
-
-function endOfMonthStr() {
-  return format(endOfMonth(new Date()), 'yyyy-MM-dd');
-}
 
 // ─── Stats for the dashboard cards ───────────────────────────────────────────
 
 export async function getDashboardStats(): Promise<DashboardStats> {
   const today = todayStr();
   const weekEnd = daysFromNowStr(7);
-  const monthStart = startOfMonthStr();
-  const monthEnd = endOfMonthStr();
+  const next30 = daysFromNowStr(30);
 
-  const [activeResult, dueWeekResult, overdueResult, closingResult] = await Promise.all([
+  const [dueTodayResult, dueWeekResult, overdueResult, closingResult] = await Promise.all([
     db
       .select({ count: count() })
-      .from(transactions)
-      .where(inArray(transactions.status, ['active', 'in_escrow'])),
+      .from(transactionTasks)
+      .where(
+        and(
+          eq(transactionTasks.dueDate, today),
+          notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
+        ),
+      ),
 
     db
       .select({ count: count() })
@@ -112,18 +109,18 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       .where(
         and(
           isNotNull(transactions.expectedCloseDate),
-          gte(transactions.expectedCloseDate, monthStart),
-          lte(transactions.expectedCloseDate, monthEnd),
+          gte(transactions.expectedCloseDate, today),
+          lte(transactions.expectedCloseDate, next30),
           notInArray(transactions.status, ['closed', 'cancelled']),
         ),
       ),
   ]);
 
   return {
-    activeTransactions: activeResult[0]?.count ?? 0,
+    tasksDueToday: dueTodayResult[0]?.count ?? 0,
     tasksDueThisWeek: dueWeekResult[0]?.count ?? 0,
     overdueTasks: overdueResult[0]?.count ?? 0,
-    closingThisMonth: closingResult[0]?.count ?? 0,
+    closingNext30Days: closingResult[0]?.count ?? 0,
   };
 }
 

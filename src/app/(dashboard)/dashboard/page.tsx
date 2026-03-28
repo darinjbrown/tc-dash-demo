@@ -7,19 +7,22 @@ import {
   getUpcomingDeadlines,
 } from '@/actions/tasks';
 import { getPendingRequests } from '@/actions/access-requests';
-import { StatsCards } from '@/components/dashboard/stats-cards';
+import { getActiveTransactionsList } from '@/actions/transactions';
+import { DashboardTopSection } from '@/components/dashboard/dashboard-top-section';
 import { TodoList } from '@/components/dashboard/todo-list';
 import { UpcomingDeadlines } from '@/components/dashboard/upcoming-deadlines';
 import { PendingRequestsCard } from '@/components/dashboard/pending-requests-card';
 
 export default async function DashboardPage() {
-  const [stats, upcomingTasks, overdueTasks, deadlines, pendingRequests] = await Promise.all([
-    getDashboardStats(),
-    getUpcomingTasks(7),
-    getOverdueTasks(),
-    getUpcomingDeadlines(10),
-    getPendingRequests(),
-  ]);
+  const [stats, upcomingTasks, overdueTasks, deadlines, pendingRequests, activeTransactions] =
+    await Promise.all([
+      getDashboardStats(),
+      getUpcomingTasks(7),
+      getOverdueTasks(),
+      getUpcomingDeadlines(10),
+      getPendingRequests(),
+      getActiveTransactionsList(),
+    ]);
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -34,7 +37,7 @@ export default async function DashboardPage() {
         <PendingRequestsCard initialRequests={pendingRequests} />
       )}
 
-      <StatsCards stats={stats} />
+      <DashboardTopSection activeTransactions={activeTransactions} stats={stats} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <TodoList

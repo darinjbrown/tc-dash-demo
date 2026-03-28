@@ -3,7 +3,8 @@
 import { useState, useTransition } from 'react';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import { toast } from 'sonner';
-import { CheckCircle2, Clock, AlertCircle, ChevronRight, MinusCircle } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, MinusCircle } from 'lucide-react';
+import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -125,31 +126,32 @@ export function TodoList({ title, tasks, variant, emptyMessage }: TodoListProps)
 
                 return (
                   <li key={task.id}>
-                    <button
-                      type="button"
-                      className={cn(
-                        'w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors group',
-                        variant === 'overdue' && 'hover:bg-destructive/5',
+                    <div className={cn(
+                      'flex items-baseline gap-1.5 flex-wrap px-4 py-2.5',
+                      variant === 'overdue' ? 'hover:bg-destructive/5' : 'hover:bg-muted/50',
+                    )}>
+                      <Link
+                        href={`/transactions/${task.transactionId}`}
+                        className="text-sm text-muted-foreground shrink-0 truncate max-w-30 hover:underline"
+                      >
+                        {task.address.split(',')[0]}
+                      </Link>
+                      <span className="text-muted-foreground/40 text-sm shrink-0">·</span>
+                      <button
+                        type="button"
+                        className="text-sm font-medium truncate flex-1 text-left hover:underline"
+                        onClick={() => openTask(task)}
+                      >
+                        {task.name}
+                      </button>
+                      <span className="text-muted-foreground/40 text-sm shrink-0">·</span>
+                      <span className={cn('text-sm shrink-0', due.className)}>{due.label}</span>
+                      {(priority === 'urgent' || priority === 'high') && (
+                        <Badge className={cn('text-[10px] px-1.5 py-0 h-4 shrink-0', priorityCfg.className)}>
+                          {priorityCfg.label}
+                        </Badge>
                       )}
-                      onClick={() => openTask(task)}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{task.name}</p>
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">
-                          {task.address}
-                          {task.city ? `, ${task.city}` : ''}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <span className={cn('text-xs', due.className)}>{due.label}</span>
-                          {(priority === 'urgent' || priority === 'high') && (
-                            <Badge className={cn('text-[10px] px-1.5 py-0 h-4', priorityCfg.className)}>
-                              {priorityCfg.label}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      <ChevronRight className="size-4 text-muted-foreground shrink-0 mt-0.5 group-hover:translate-x-0.5 transition-transform" />
-                    </button>
+                    </div>
                   </li>
                 );
               })}
