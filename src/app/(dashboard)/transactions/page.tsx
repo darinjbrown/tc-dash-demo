@@ -20,16 +20,15 @@ import type { AgentTransactionGroup } from '@/actions/transactions';
 
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pending' },
-  { value: 'active', label: 'Active' },
+  { value: 'listed', label: 'Listed' },
   { value: 'in_escrow', label: 'In Escrow' },
-  { value: 'closing', label: 'Closing' },
   { value: 'closed', label: 'Closed' },
   { value: 'cancelled', label: 'Cancelled' },
 ];
 
 export default function TransactionsPage() {
   const [groups, setGroups] = useState<AgentTransactionGroup[]>([]);
-  const [agents, setAgents] = useState<{ id: string; name: string; broker: string | null }[]>([]);
+  const [agents, setAgents] = useState<{ id: string; name: string; broker: string | null; email: string; phone: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -64,9 +63,15 @@ export default function TransactionsPage() {
         const matchesSearch =
           !q ||
           tx.address.toLowerCase().includes(q) ||
+          (tx.city ?? '').toLowerCase().includes(q) ||
           (tx.mlsNumber ?? '').toLowerCase().includes(q) ||
           (tx.buyerName ?? '').toLowerCase().includes(q) ||
-          (tx.sellerName ?? '').toLowerCase().includes(q);
+          (tx.sellerName ?? '').toLowerCase().includes(q) ||
+          (tx.sellerAgentName ?? '').toLowerCase().includes(q) ||
+          (tx.buyerAgentName ?? '').toLowerCase().includes(q) ||
+          (tx.sellerTcName ?? '').toLowerCase().includes(q) ||
+          (tx.buyerTcName ?? '').toLowerCase().includes(q) ||
+          (tx.expectedCloseDate ?? '').includes(q);
         const matchesStatus =
           selectedStatuses.length === 0 || selectedStatuses.includes(tx.status);
         return matchesSearch && matchesStatus;

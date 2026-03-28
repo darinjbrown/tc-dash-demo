@@ -88,14 +88,30 @@ export const transactions = sqliteTable('transactions', {
   // sellerAgentId = in-house agent representing the Seller (was listingAgentId)
   sellerAgentId: text('listing_agent_id').references(() => agents.id),
   sellerAgentIsInHouse: integer('seller_agent_is_in_house', { mode: 'boolean' }).default(false),
+  // Outside seller agent contact info (only used when sellerAgentIsInHouse = false)
+  sellerAgentCompany: text('seller_agent_company'),
+  sellerAgentPhone: text('seller_agent_phone'),
+  sellerAgentEmail: text('seller_agent_email'),
   // buyerAgentId = in-house agent representing the Buyer (was sellingAgentId)
   buyerAgentId: text('selling_agent_id').references(() => agents.id),
   buyerAgentIsInHouse: integer('buyer_agent_is_in_house', { mode: 'boolean' }).default(false),
+  // Outside buyer agent contact info (only used when buyerAgentIsInHouse = false)
+  buyerAgentCompany: text('buyer_agent_company'),
+  buyerAgentPhone: text('buyer_agent_phone'),
+  buyerAgentEmail: text('buyer_agent_email'),
+  // Seller-side TC contact info
+  sellerTcName: text('seller_tc_name'),
+  sellerTcEmail: text('seller_tc_email'),
+  sellerTcPhone: text('seller_tc_phone'),
+  // Buyer-side TC contact info
+  buyerTcName: text('buyer_tc_name'),
+  buyerTcEmail: text('buyer_tc_email'),
+  buyerTcPhone: text('buyer_tc_phone'),
   transactionType: text('transaction_type', {
     enum: ['listing', 'purchase', 'dual'],
   }).notNull(),
   status: text('status', {
-    enum: ['pending', 'active', 'in_escrow', 'closing', 'closed', 'cancelled'],
+    enum: ['pending', 'listed', 'in_escrow', 'closed', 'cancelled'],
   })
     .default('pending')
     .notNull(),
@@ -107,8 +123,7 @@ export const transactions = sqliteTable('transactions', {
   escrowOfficer: text('escrow_officer'),
   escrowOfficerPhone: text('escrow_officer_phone'),
   escrowOfficerEmail: text('escrow_officer_email'),
-  titleCompany: text('title_company'),
-  titleOfficer: text('title_officer'),
+
   lenderName: text('lender_name'),
   loanOfficer: text('loan_officer'),
   loanOfficerPhone: text('loan_officer_phone'),
@@ -119,16 +134,20 @@ export const transactions = sqliteTable('transactions', {
   sellerAgent: text('seller_agent'),
   // Money stored in cents (integers)
   purchasePrice: integer('purchase_price'),
-  listPrice: integer('list_price'),
   earnestMoneyDeposit: integer('earnest_money_deposit'),
-  commissionPercent: text('commission_percent'), // string to avoid float issues
+  buyerCommissionPercent: text('buyer_commission_percent'), // string to avoid float issues
+  listingCommissionPercent: text('listing_commission_percent'), // string to avoid float issues
   // Dates stored as ISO strings
+  contractDate: text('contract_date'),
   acceptanceDate: text('acceptance_date'),
-  escrowOpenDate: text('escrow_open_date'),
-  listingActiveDate: text('listing_active_date'),
+  verificationOfFundsDate: text('verification_of_funds_date'),
+  earnestMoneyDueDate: text('earnest_money_due_date'),
   inspectionContingencyDate: text('inspection_contingency_date'),
-  appraisalContingencyDate: text('appraisal_contingency_date'),
+  insuranceContingencyDate: text('insurance_contingency_date'),
   loanContingencyDate: text('loan_contingency_date'),
+  appraisalContingencyDate: text('appraisal_contingency_date'),
+  hoaDocsDueDate: text('hoa_docs_due_date'),
+  listingActiveDate: text('listing_active_date'),
   expectedCloseDate: text('expected_close_date'),
   actualCloseDate: text('actual_close_date'),
   notes: text('notes'),
@@ -179,16 +198,20 @@ export const taskTemplates = sqliteTable('task_templates', {
   relativeDueDays: integer('relative_due_days').notNull(),
   relativeTo: text('relative_to', {
     enum: [
+      'contract_date',
       'acceptance_date',
-      'escrow_open',
-      'expected_close_date',
+      'verification_of_funds_date',
+      'earnest_money_due_date',
       'inspection_contingency_date',
-      'appraisal_contingency_date',
+      'insurance_contingency_date',
       'loan_contingency_date',
+      'appraisal_contingency_date',
+      'hoa_docs_due_date',
       'listing_active_date',
+      'expected_close_date',
     ],
   })
-    .default('escrow_open')
+    .default('acceptance_date')
     .notNull(),
   sortOrder: integer('sort_order').notNull(),
   isRequired: integer('is_required', { mode: 'boolean' }).default(true).notNull(),

@@ -28,9 +28,13 @@ export type TransactionSummary = {
   mlsNumber: string | null;
   sellerAgentId: string | null;
   sellerAgentName: string | null;
+  sellerAgentPhone: string | null;
+  sellerAgentEmail: string | null;
   sellerAgentIsInHouse: boolean | null;
   buyerAgentId: string | null;
   buyerAgentName: string | null;
+  buyerAgentPhone: string | null;
+  buyerAgentEmail: string | null;
   buyerAgentIsInHouse: boolean | null;
   transactionType: string;
   status: string;
@@ -38,6 +42,12 @@ export type TransactionSummary = {
   buyerName: string | null;
   sellerName: string | null;
   expectedCloseDate: string | null;
+  sellerTcName: string | null;
+  sellerTcPhone: string | null;
+  sellerTcEmail: string | null;
+  buyerTcName: string | null;
+  buyerTcPhone: string | null;
+  buyerTcEmail: string | null;
   totalTasks: number;
   completedTasks: number;
 };
@@ -57,14 +67,15 @@ export type ActivityEntry = {
 };
 
 export type TransactionDetail = Transaction & {
+  // In-house agent info (joined from agents table)
   sellerAgentName: string | null;
-  sellerAgentEmail: string | null;
-  sellerAgentPhone: string | null;
-  sellerAgentBroker: string | null;
+  sellerInHouseEmail: string | null;
+  sellerInHousePhone: string | null;
+  sellerInHouseBroker: string | null;
   buyerAgentName: string | null;
-  buyerAgentEmail: string | null;
-  buyerAgentPhone: string | null;
-  buyerAgentBroker: string | null;
+  buyerInHouseEmail: string | null;
+  buyerInHousePhone: string | null;
+  buyerInHouseBroker: string | null;
   tasks: TransactionTask[];
   activity: ActivityEntry[];
 };
@@ -94,9 +105,13 @@ export async function getTransactions(): Promise<AgentTransactionGroup[]> {
       mlsNumber: transactions.mlsNumber,
       sellerAgentId: transactions.sellerAgentId,
       sellerAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.sellerAgentId})`,
+      sellerAgentPhone: sql<string | null>`CASE WHEN ${transactions.sellerAgentIsInHouse} = 1 THEN (select phone from agents where agents.id = ${transactions.sellerAgentId}) ELSE ${transactions.sellerAgentPhone} END`,
+      sellerAgentEmail: sql<string | null>`CASE WHEN ${transactions.sellerAgentIsInHouse} = 1 THEN (select email from agents where agents.id = ${transactions.sellerAgentId}) ELSE ${transactions.sellerAgentEmail} END`,
       sellerAgentIsInHouse: transactions.sellerAgentIsInHouse,
       buyerAgentId: transactions.buyerAgentId,
       buyerAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.buyerAgentId})`,
+      buyerAgentPhone: sql<string | null>`CASE WHEN ${transactions.buyerAgentIsInHouse} = 1 THEN (select phone from agents where agents.id = ${transactions.buyerAgentId}) ELSE ${transactions.buyerAgentPhone} END`,
+      buyerAgentEmail: sql<string | null>`CASE WHEN ${transactions.buyerAgentIsInHouse} = 1 THEN (select email from agents where agents.id = ${transactions.buyerAgentId}) ELSE ${transactions.buyerAgentEmail} END`,
       buyerAgentIsInHouse: transactions.buyerAgentIsInHouse,
       transactionType: transactions.transactionType,
       status: transactions.status,
@@ -104,6 +119,12 @@ export async function getTransactions(): Promise<AgentTransactionGroup[]> {
       buyerName: transactions.buyerName,
       sellerName: transactions.sellerName,
       expectedCloseDate: transactions.expectedCloseDate,
+      sellerTcName: transactions.sellerTcName,
+      sellerTcPhone: transactions.sellerTcPhone,
+      sellerTcEmail: transactions.sellerTcEmail,
+      buyerTcName: transactions.buyerTcName,
+      buyerTcPhone: transactions.buyerTcPhone,
+      buyerTcEmail: transactions.buyerTcEmail,
     })
     .from(transactions)
     .orderBy(desc(transactions.createdAt));
@@ -175,7 +196,7 @@ export async function getActiveTransactionsList(): Promise<ActiveTransactionRow[
       buyerAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.buyerAgentId})`,
     })
     .from(transactions)
-    .where(inArray(transactions.status, ['active', 'in_escrow']))
+    .where(inArray(transactions.status, ['listed', 'in_escrow']))
     .orderBy(asc(transactions.expectedCloseDate));
 
   if (rows.length === 0) return [];
@@ -212,8 +233,20 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
       agentId: transactions.agentId,
       sellerAgentId: transactions.sellerAgentId,
       sellerAgentIsInHouse: transactions.sellerAgentIsInHouse,
+      sellerAgentCompany: transactions.sellerAgentCompany,
+      sellerAgentPhone: transactions.sellerAgentPhone,
+      sellerAgentEmail: transactions.sellerAgentEmail,
       buyerAgentId: transactions.buyerAgentId,
       buyerAgentIsInHouse: transactions.buyerAgentIsInHouse,
+      buyerAgentCompany: transactions.buyerAgentCompany,
+      buyerAgentPhone: transactions.buyerAgentPhone,
+      buyerAgentEmail: transactions.buyerAgentEmail,
+      sellerTcName: transactions.sellerTcName,
+      sellerTcEmail: transactions.sellerTcEmail,
+      sellerTcPhone: transactions.sellerTcPhone,
+      buyerTcName: transactions.buyerTcName,
+      buyerTcEmail: transactions.buyerTcEmail,
+      buyerTcPhone: transactions.buyerTcPhone,
       transactionType: transactions.transactionType,
       status: transactions.status,
       propertyType: transactions.propertyType,
@@ -222,8 +255,7 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
       escrowOfficer: transactions.escrowOfficer,
       escrowOfficerPhone: transactions.escrowOfficerPhone,
       escrowOfficerEmail: transactions.escrowOfficerEmail,
-      titleCompany: transactions.titleCompany,
-      titleOfficer: transactions.titleOfficer,
+
       lenderName: transactions.lenderName,
       loanOfficer: transactions.loanOfficer,
       loanOfficerPhone: transactions.loanOfficerPhone,
@@ -233,15 +265,19 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
       sellerName: transactions.sellerName,
       sellerAgent: transactions.sellerAgent,
       purchasePrice: transactions.purchasePrice,
-      listPrice: transactions.listPrice,
       earnestMoneyDeposit: transactions.earnestMoneyDeposit,
-      commissionPercent: transactions.commissionPercent,
+      buyerCommissionPercent: transactions.buyerCommissionPercent,
+      listingCommissionPercent: transactions.listingCommissionPercent,
+      contractDate: transactions.contractDate,
       acceptanceDate: transactions.acceptanceDate,
-      escrowOpenDate: transactions.escrowOpenDate,
-      listingActiveDate: transactions.listingActiveDate,
+      verificationOfFundsDate: transactions.verificationOfFundsDate,
+      earnestMoneyDueDate: transactions.earnestMoneyDueDate,
       inspectionContingencyDate: transactions.inspectionContingencyDate,
-      appraisalContingencyDate: transactions.appraisalContingencyDate,
+      insuranceContingencyDate: transactions.insuranceContingencyDate,
       loanContingencyDate: transactions.loanContingencyDate,
+      appraisalContingencyDate: transactions.appraisalContingencyDate,
+      hoaDocsDueDate: transactions.hoaDocsDueDate,
+      listingActiveDate: transactions.listingActiveDate,
       expectedCloseDate: transactions.expectedCloseDate,
       actualCloseDate: transactions.actualCloseDate,
       notes: transactions.notes,
@@ -249,13 +285,13 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
       createdAt: transactions.createdAt,
       updatedAt: transactions.updatedAt,
       sellerAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.sellerAgentId})`,
-      sellerAgentEmail: sql<string | null>`(select email from agents where agents.id = ${transactions.sellerAgentId})`,
-      sellerAgentPhone: sql<string | null>`(select phone from agents where agents.id = ${transactions.sellerAgentId})`,
-      sellerAgentBroker: sql<string | null>`(select broker from agents where agents.id = ${transactions.sellerAgentId})`,
+      sellerInHouseEmail: sql<string | null>`(select email from agents where agents.id = ${transactions.sellerAgentId})`,
+      sellerInHousePhone: sql<string | null>`(select phone from agents where agents.id = ${transactions.sellerAgentId})`,
+      sellerInHouseBroker: sql<string | null>`(select broker from agents where agents.id = ${transactions.sellerAgentId})`,
       buyerAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.buyerAgentId})`,
-      buyerAgentEmail: sql<string | null>`(select email from agents where agents.id = ${transactions.buyerAgentId})`,
-      buyerAgentPhone: sql<string | null>`(select phone from agents where agents.id = ${transactions.buyerAgentId})`,
-      buyerAgentBroker: sql<string | null>`(select broker from agents where agents.id = ${transactions.buyerAgentId})`,
+      buyerInHouseEmail: sql<string | null>`(select email from agents where agents.id = ${transactions.buyerAgentId})`,
+      buyerInHousePhone: sql<string | null>`(select phone from agents where agents.id = ${transactions.buyerAgentId})`,
+      buyerInHouseBroker: sql<string | null>`(select broker from agents where agents.id = ${transactions.buyerAgentId})`,
     })
     .from(transactions)
     .where(eq(transactions.id, id));
@@ -286,13 +322,13 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
   return {
     ...txRow,
     sellerAgentName: txRow.sellerAgentName ?? null,
-    sellerAgentEmail: txRow.sellerAgentEmail ?? null,
-    sellerAgentPhone: txRow.sellerAgentPhone ?? null,
-    sellerAgentBroker: txRow.sellerAgentBroker ?? null,
+    sellerInHouseEmail: txRow.sellerInHouseEmail ?? null,
+    sellerInHousePhone: txRow.sellerInHousePhone ?? null,
+    sellerInHouseBroker: txRow.sellerInHouseBroker ?? null,
     buyerAgentName: txRow.buyerAgentName ?? null,
-    buyerAgentEmail: txRow.buyerAgentEmail ?? null,
-    buyerAgentPhone: txRow.buyerAgentPhone ?? null,
-    buyerAgentBroker: txRow.buyerAgentBroker ?? null,
+    buyerInHouseEmail: txRow.buyerInHouseEmail ?? null,
+    buyerInHousePhone: txRow.buyerInHousePhone ?? null,
+    buyerInHouseBroker: txRow.buyerInHouseBroker ?? null,
     tasks,
     activity: activityRows,
   };
@@ -323,8 +359,20 @@ export async function createTransaction(
       mlsNumber: n(values.mlsNumber),
       sellerAgentId: n(values.sellerAgentId),
       sellerAgentIsInHouse: values.sellerAgentIsInHouse ?? false,
+      sellerAgentCompany: n(values.sellerAgentCompany),
+      sellerAgentPhone: n(values.sellerAgentPhone),
+      sellerAgentEmail: n(values.sellerAgentEmail),
       buyerAgentId: n(values.buyerAgentId),
       buyerAgentIsInHouse: values.buyerAgentIsInHouse ?? false,
+      buyerAgentCompany: n(values.buyerAgentCompany),
+      buyerAgentPhone: n(values.buyerAgentPhone),
+      buyerAgentEmail: n(values.buyerAgentEmail),
+      sellerTcName: n(values.sellerTcName),
+      sellerTcEmail: n(values.sellerTcEmail),
+      sellerTcPhone: n(values.sellerTcPhone),
+      buyerTcName: n(values.buyerTcName),
+      buyerTcEmail: n(values.buyerTcEmail),
+      buyerTcPhone: n(values.buyerTcPhone),
       transactionType: values.transactionType,
       status: values.status,
       propertyType: n(values.propertyType) as Transaction['propertyType'],
@@ -333,8 +381,7 @@ export async function createTransaction(
       escrowOfficer: n(values.escrowOfficer),
       escrowOfficerPhone: n(values.escrowOfficerPhone),
       escrowOfficerEmail: n(values.escrowOfficerEmail),
-      titleCompany: n(values.titleCompany),
-      titleOfficer: n(values.titleOfficer),
+
       lenderName: n(values.lenderName),
       loanOfficer: n(values.loanOfficer),
       loanOfficerPhone: n(values.loanOfficerPhone),
@@ -344,15 +391,19 @@ export async function createTransaction(
       sellerName: n(values.sellerName),
       sellerAgent: n(values.sellerAgent),
       purchasePrice: dollars(values.purchasePrice),
-      listPrice: dollars(values.listPrice),
       earnestMoneyDeposit: dollars(values.earnestMoneyDeposit),
-      commissionPercent: n(values.commissionPercent),
+      buyerCommissionPercent: n(values.buyerCommissionPercent),
+      listingCommissionPercent: n(values.listingCommissionPercent),
+      contractDate: n(values.contractDate),
       acceptanceDate: n(values.acceptanceDate),
-      escrowOpenDate: n(values.escrowOpenDate),
-      listingActiveDate: n(values.listingActiveDate),
+      verificationOfFundsDate: n(values.verificationOfFundsDate),
+      earnestMoneyDueDate: n(values.earnestMoneyDueDate),
       inspectionContingencyDate: n(values.inspectionContingencyDate),
-      appraisalContingencyDate: n(values.appraisalContingencyDate),
+      insuranceContingencyDate: n(values.insuranceContingencyDate),
       loanContingencyDate: n(values.loanContingencyDate),
+      appraisalContingencyDate: n(values.appraisalContingencyDate),
+      hoaDocsDueDate: n(values.hoaDocsDueDate),
+      listingActiveDate: n(values.listingActiveDate),
       expectedCloseDate: n(values.expectedCloseDate),
       actualCloseDate: n(values.actualCloseDate),
       notes: n(values.notes),
@@ -380,7 +431,7 @@ export async function createTransaction(
       userId,
       action: 'created',
       details: JSON.stringify({ address: values.address }),
-    });
+    }).catch(() => {/* activity log is non-critical */});
 
     revalidatePath('/transactions');
     revalidatePath('/dashboard');
@@ -416,8 +467,20 @@ export async function updateTransaction(
         mlsNumber: n(values.mlsNumber),
         sellerAgentId: n(values.sellerAgentId),
         sellerAgentIsInHouse: values.sellerAgentIsInHouse ?? false,
+        sellerAgentCompany: n(values.sellerAgentCompany),
+        sellerAgentPhone: n(values.sellerAgentPhone),
+        sellerAgentEmail: n(values.sellerAgentEmail),
         buyerAgentId: n(values.buyerAgentId),
         buyerAgentIsInHouse: values.buyerAgentIsInHouse ?? false,
+        buyerAgentCompany: n(values.buyerAgentCompany),
+        buyerAgentPhone: n(values.buyerAgentPhone),
+        buyerAgentEmail: n(values.buyerAgentEmail),
+        sellerTcName: n(values.sellerTcName),
+        sellerTcEmail: n(values.sellerTcEmail),
+        sellerTcPhone: n(values.sellerTcPhone),
+        buyerTcName: n(values.buyerTcName),
+        buyerTcEmail: n(values.buyerTcEmail),
+        buyerTcPhone: n(values.buyerTcPhone),
         transactionType: values.transactionType,
         status: values.status,
         propertyType: n(values.propertyType) as Transaction['propertyType'],
@@ -426,8 +489,7 @@ export async function updateTransaction(
         escrowOfficer: n(values.escrowOfficer),
         escrowOfficerPhone: n(values.escrowOfficerPhone),
         escrowOfficerEmail: n(values.escrowOfficerEmail),
-        titleCompany: n(values.titleCompany),
-        titleOfficer: n(values.titleOfficer),
+
         lenderName: n(values.lenderName),
         loanOfficer: n(values.loanOfficer),
         loanOfficerPhone: n(values.loanOfficerPhone),
@@ -437,15 +499,19 @@ export async function updateTransaction(
         sellerName: n(values.sellerName),
         sellerAgent: n(values.sellerAgent),
         purchasePrice: dollars(values.purchasePrice),
-        listPrice: dollars(values.listPrice),
         earnestMoneyDeposit: dollars(values.earnestMoneyDeposit),
-        commissionPercent: n(values.commissionPercent),
+        buyerCommissionPercent: n(values.buyerCommissionPercent),
+        listingCommissionPercent: n(values.listingCommissionPercent),
+        contractDate: n(values.contractDate),
         acceptanceDate: n(values.acceptanceDate),
-        escrowOpenDate: n(values.escrowOpenDate),
-        listingActiveDate: n(values.listingActiveDate),
+        verificationOfFundsDate: n(values.verificationOfFundsDate),
+        earnestMoneyDueDate: n(values.earnestMoneyDueDate),
         inspectionContingencyDate: n(values.inspectionContingencyDate),
-        appraisalContingencyDate: n(values.appraisalContingencyDate),
+        insuranceContingencyDate: n(values.insuranceContingencyDate),
         loanContingencyDate: n(values.loanContingencyDate),
+        appraisalContingencyDate: n(values.appraisalContingencyDate),
+        hoaDocsDueDate: n(values.hoaDocsDueDate),
+        listingActiveDate: n(values.listingActiveDate),
         expectedCloseDate: n(values.expectedCloseDate),
         actualCloseDate: n(values.actualCloseDate),
         notes: n(values.notes),
@@ -480,7 +546,7 @@ export async function updateTransaction(
       userId,
       action: 'updated',
       details: JSON.stringify({ address: values.address }),
-    });
+    }).catch(() => {/* activity log is non-critical */});
 
     revalidatePath(`/transactions/${id}`);
     revalidatePath('/transactions');

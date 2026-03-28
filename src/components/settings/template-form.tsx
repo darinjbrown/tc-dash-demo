@@ -47,13 +47,17 @@ const templateFormSchema = z.object({
   templateGroupId: z.string().min(1),
   relativeDueDays: z.number().int(),
   relativeTo: z.enum([
+    'contract_date',
     'acceptance_date',
-    'escrow_open',
-    'expected_close_date',
+    'verification_of_funds_date',
+    'earnest_money_due_date',
     'inspection_contingency_date',
-    'appraisal_contingency_date',
+    'insurance_contingency_date',
     'loan_contingency_date',
+    'appraisal_contingency_date',
+    'hoa_docs_due_date',
     'listing_active_date',
+    'expected_close_date',
   ]),
   sortOrder: z.number().int().min(0),
   isRequired: z.boolean(),
@@ -77,13 +81,17 @@ const CATEGORIES = [
 ];
 
 const RELATIVE_TO_OPTIONS = [
-  { value: 'listing_active_date', label: 'Listing Active Date' },
+  { value: 'contract_date', label: 'Contract Date' },
   { value: 'acceptance_date', label: 'Acceptance Date' },
-  { value: 'escrow_open', label: 'Escrow Open Date' },
-  { value: 'expected_close_date', label: 'Expected Close Date' },
+  { value: 'verification_of_funds_date', label: 'Verification of Funds Due' },
+  { value: 'earnest_money_due_date', label: 'Earnest Money Due' },
   { value: 'inspection_contingency_date', label: 'Inspection Contingency' },
-  { value: 'appraisal_contingency_date', label: 'Appraisal Contingency' },
+  { value: 'insurance_contingency_date', label: 'Insurance Contingency' },
   { value: 'loan_contingency_date', label: 'Loan Contingency' },
+  { value: 'appraisal_contingency_date', label: 'Appraisal Contingency' },
+  { value: 'hoa_docs_due_date', label: 'HOA Docs Due' },
+  { value: 'listing_active_date', label: 'Listing Active Date' },
+  { value: 'expected_close_date', label: 'Expected Close Date' },
 ];
 
 interface TemplateFormProps {
@@ -147,7 +155,7 @@ export function TemplateForm({
           category: 'closing' as const,
           templateGroupId,
           relativeDueDays: 0,
-          relativeTo: 'escrow_open' as const,
+          relativeTo: 'acceptance_date' as const,
           sortOrder: 100,
           isRequired: true,
           isActive: true,

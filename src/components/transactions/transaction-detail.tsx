@@ -38,14 +38,13 @@ import { TransactionForm } from './transaction-form';
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   pending: { label: 'Pending', className: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
-  active: { label: 'Active', className: 'bg-green-100 text-green-800 border-green-200' },
+  listed: { label: 'Listed', className: 'bg-green-100 text-green-800 border-green-200' },
   in_escrow: { label: 'In Escrow', className: 'bg-blue-100 text-blue-800 border-blue-200' },
-  closing: { label: 'Closing', className: 'bg-purple-100 text-purple-800 border-purple-200' },
   closed: { label: 'Closed', className: 'bg-gray-100 text-gray-700 border-gray-200' },
   cancelled: { label: 'Cancelled', className: 'bg-red-100 text-red-700 border-red-200' },
 };
 
-const ALL_STATUSES = ['pending', 'active', 'in_escrow', 'closing', 'closed', 'cancelled'] as const;
+const ALL_STATUSES = ['pending', 'listed', 'in_escrow', 'closed', 'cancelled'] as const;
 
 // ─── Contact card ──────────────────────────────────────────────────────────────
 
@@ -140,7 +139,7 @@ function activityDescription(action: string, details: string | null): string {
 
 interface TransactionDetailProps {
   transaction: TxDetail;
-  agents: { id: string; name: string; broker: string | null }[];
+  agents: { id: string; name: string; broker: string | null; email: string; phone: string | null }[];
 }
 
 export function TransactionDetail({ transaction: tx, agents }: TransactionDetailProps) {
@@ -154,14 +153,14 @@ export function TransactionDetail({ transaction: tx, agents }: TransactionDetail
 
   // Determine display name for outside agents
   const sellerAgentDisplayName = tx.sellerAgentIsInHouse ? tx.sellerAgentName : tx.sellerAgent;
-  const sellerAgentDisplayPhone = tx.sellerAgentIsInHouse ? tx.sellerAgentPhone : null;
-  const sellerAgentDisplayEmail = tx.sellerAgentIsInHouse ? tx.sellerAgentEmail : null;
-  const sellerAgentDisplayBroker = tx.sellerAgentIsInHouse ? tx.sellerAgentBroker : null;
+  const sellerAgentDisplayPhone = tx.sellerAgentIsInHouse ? tx.sellerInHousePhone : tx.sellerAgentPhone;
+  const sellerAgentDisplayEmail = tx.sellerAgentIsInHouse ? tx.sellerInHouseEmail : tx.sellerAgentEmail;
+  const sellerAgentDisplayBroker = tx.sellerAgentIsInHouse ? tx.sellerInHouseBroker : tx.sellerAgentCompany;
 
   const buyerAgentDisplayName = tx.buyerAgentIsInHouse ? tx.buyerAgentName : tx.buyerAgent;
-  const buyerAgentDisplayPhone = tx.buyerAgentIsInHouse ? tx.buyerAgentPhone : null;
-  const buyerAgentDisplayEmail = tx.buyerAgentIsInHouse ? tx.buyerAgentEmail : null;
-  const buyerAgentDisplayBroker = tx.buyerAgentIsInHouse ? tx.buyerAgentBroker : null;
+  const buyerAgentDisplayPhone = tx.buyerAgentIsInHouse ? tx.buyerInHousePhone : tx.buyerAgentPhone;
+  const buyerAgentDisplayEmail = tx.buyerAgentIsInHouse ? tx.buyerInHouseEmail : tx.buyerAgentEmail;
+  const buyerAgentDisplayBroker = tx.buyerAgentIsInHouse ? tx.buyerInHouseBroker : tx.buyerAgentCompany;
 
   function handleStatusChange(status: string) {
     startTransition(async () => {
@@ -296,11 +295,18 @@ export function TransactionDetail({ transaction: tx, agents }: TransactionDetail
                 </h3>
                 <Separator className="mb-3" />
                 <div className="divide-y">
+                  <DateRow label="Contract Date" value={tx.contractDate} />
                   <DateRow label="Acceptance" value={tx.acceptanceDate} />
-                  <DateRow label="Escrow Open" value={tx.escrowOpenDate} />
+                  <DateRow label="Verification of Funds Due" value={tx.verificationOfFundsDate} />
+                  <DateRow label="Earnest Money Due" value={tx.earnestMoneyDueDate} />
                   <DateRow label="Inspection Contingency" value={tx.inspectionContingencyDate} />
-                  <DateRow label="Appraisal Contingency" value={tx.appraisalContingencyDate} />
+                  <DateRow label="Insurance Contingency" value={tx.insuranceContingencyDate} />
                   <DateRow label="Loan Contingency" value={tx.loanContingencyDate} />
+                  <DateRow label="Appraisal Contingency" value={tx.appraisalContingencyDate} />
+                  <DateRow label="HOA Docs Due" value={tx.hoaDocsDueDate} />
+                  {tx.listingActiveDate && (
+                    <DateRow label="Listing Active" value={tx.listingActiveDate} />
+                  )}
                   <DateRow label="Expected Close" value={tx.expectedCloseDate} />
                   <DateRow label="Actual Close" value={tx.actualCloseDate} />
                 </div>
@@ -342,22 +348,22 @@ export function TransactionDetail({ transaction: tx, agents }: TransactionDetail
                       <span className="font-medium">{formatCurrency(tx.purchasePrice)}</span>
                     </div>
                   )}
-                  {tx.listPrice != null && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">List Price</span>
-                      <span className="font-medium">{formatCurrency(tx.listPrice)}</span>
-                    </div>
-                  )}
                   {tx.earnestMoneyDeposit != null && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Earnest Money</span>
                       <span className="font-medium">{formatCurrency(tx.earnestMoneyDeposit)}</span>
                     </div>
                   )}
-                  {tx.commissionPercent && (
+                  {tx.buyerCommissionPercent && (
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Commission</span>
-                      <span className="font-medium">{tx.commissionPercent}%</span>
+                      <span className="text-muted-foreground">Buyer Commission</span>
+                      <span className="font-medium">{tx.buyerCommissionPercent}%</span>
+                    </div>
+                  )}
+                  {tx.listingCommissionPercent && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Listing Commission</span>
+                      <span className="font-medium">{tx.listingCommissionPercent}%</span>
                     </div>
                   )}
                   {tx.escrowNumber && (
@@ -399,17 +405,25 @@ export function TransactionDetail({ transaction: tx, agents }: TransactionDetail
                   />
 
                   <ContactCard
+                    title="Seller's TC"
+                    name={tx.sellerTcName}
+                    phone={tx.sellerTcPhone}
+                    email={tx.sellerTcEmail}
+                  />
+                  <ContactCard
+                    title="Buyer's TC"
+                    name={tx.buyerTcName}
+                    phone={tx.buyerTcPhone}
+                    email={tx.buyerTcEmail}
+                  />
+
+                  <ContactCard
                     title="Escrow Officer"
                     name={tx.escrowOfficer}
                     phone={tx.escrowOfficerPhone}
                     email={tx.escrowOfficerEmail}
                   />
-                  <ContactCard
-                    title="Title Officer"
-                    name={tx.titleOfficer}
-                    phone={null}
-                    email={null}
-                  />
+
                   <ContactCard
                     title="Loan Officer"
                     name={tx.loanOfficer}

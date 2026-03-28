@@ -45,20 +45,25 @@ export async function getAgents(): Promise<AgentWithStats[]> {
       isActive: agents.isActive,
       createdAt: agents.createdAt,
       updatedAt: agents.updatedAt,
-      transactionCount: sql<number>`(
-        select count(distinct t.id) from transactions t
-        where t.listing_agent_id = ${agents.id} or t.selling_agent_id = ${agents.id}
-      )`,
+      transactionCount: sql<number>`count(distinct ${transactions.id})`,
     })
     .from(agents)
+    .leftJoin(
+      transactions,
+      or(
+        eq(transactions.sellerAgentId, agents.id),
+        eq(transactions.buyerAgentId, agents.id),
+      ),
+    )
+    .groupBy(agents.id)
     .orderBy(asc(agents.name));
 
   return rows;
 }
 
-export async function getAgentsForSelect(): Promise<{ id: string; name: string; broker: string | null }[]> {
+export async function getAgentsForSelect(): Promise<{ id: string; name: string; broker: string | null; email: string; phone: string | null }[]> {
   return db
-    .select({ id: agents.id, name: agents.name, broker: agents.broker })
+    .select({ id: agents.id, name: agents.name, broker: agents.broker, email: agents.email, phone: agents.phone })
     .from(agents)
     .where(eq(agents.isActive, true))
     .orderBy(asc(agents.name));
@@ -68,7 +73,7 @@ export async function getAgentsForSelect(): Promise<{ id: string; name: string; 
 
 export async function createAgent(
   data: AgentFormValues,
-): Promise<{ success: boolean; data?: { id: string; name: string; broker: string | null }; error?: string }> {
+): Promise<{ success: boolean; data?: { id: string; name: string; broker: string | null; email: string; phone: string | null }; error?: string }> {
   const parsed = agentSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
@@ -87,7 +92,7 @@ export async function createAgent(
       brokerageId: v.brokerageId?.trim() || null,
     });
     revalidatePath('/agents');
-    return { success: true, data: { id, name: v.name, broker: v.broker?.trim() || null } };
+    return { success: true, data: { id, name: v.name, broker: v.broker?.trim() || null, email: v.email, phone: v.phone?.trim() || null } };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create agent';
     return { success: false, error: message };

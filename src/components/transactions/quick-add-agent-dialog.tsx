@@ -30,7 +30,7 @@ type QuickAddValues = z.infer<typeof quickAddSchema>;
 interface QuickAddAgentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAgentCreated: (agent: { id: string; name: string; broker: string | null }) => void;
+  onAgentCreated: (agent: { id: string; name: string; broker: string | null; email: string; phone: string | null }) => void;
 }
 
 export function QuickAddAgentDialog({ open, onOpenChange, onAgentCreated }: QuickAddAgentDialogProps) {

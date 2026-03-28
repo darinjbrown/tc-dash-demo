@@ -4,20 +4,28 @@ import type { TaskTemplate, TaskTemplateGroup, Transaction } from '@/db/schema';
 // Map relativeTo keys to transaction fields
 function getMilestoneDate(tx: Transaction, relativeTo: string): string | null {
   switch (relativeTo) {
+    case 'contract_date':
+      return tx.contractDate ?? null;
     case 'acceptance_date':
       return tx.acceptanceDate ?? null;
-    case 'escrow_open':
-      return tx.escrowOpenDate ?? null;
-    case 'expected_close_date':
-      return tx.expectedCloseDate ?? null;
+    case 'verification_of_funds_date':
+      return tx.verificationOfFundsDate ?? null;
+    case 'earnest_money_due_date':
+      return tx.earnestMoneyDueDate ?? null;
     case 'inspection_contingency_date':
       return tx.inspectionContingencyDate ?? null;
-    case 'appraisal_contingency_date':
-      return tx.appraisalContingencyDate ?? null;
+    case 'insurance_contingency_date':
+      return tx.insuranceContingencyDate ?? null;
     case 'loan_contingency_date':
       return tx.loanContingencyDate ?? null;
+    case 'appraisal_contingency_date':
+      return tx.appraisalContingencyDate ?? null;
+    case 'hoa_docs_due_date':
+      return tx.hoaDocsDueDate ?? null;
     case 'listing_active_date':
       return tx.listingActiveDate ?? null;
+    case 'expected_close_date':
+      return tx.expectedCloseDate ?? null;
     default:
       return null;
   }
