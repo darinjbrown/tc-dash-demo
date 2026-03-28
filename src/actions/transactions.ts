@@ -9,7 +9,7 @@ import {
   activityLog,
 } from '@/db/schema';
 import type { Transaction, TransactionTask } from '@/db/schema';
-import { eq, count, sql, asc, desc } from 'drizzle-orm';
+import { eq, count, sql, asc, desc, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/lib/auth';
 import { stampTasks, recalculateTaskDueDates } from '@/lib/task-stamping';
@@ -147,6 +147,57 @@ export async function getTransactions(): Promise<AgentTransactionGroup[]> {
   }
 
   return Array.from(groupMap.values());
+}
+
+export type ActiveTransactionRow = {
+  id: string;
+  address: string;
+  city: string | null;
+  transactionType: string;
+  status: string;
+  expectedCloseDate: string | null;
+  sellerAgentName: string | null;
+  buyerAgentName: string | null;
+  totalTasks: number;
+  completedTasks: number;
+};
+
+export async function getActiveTransactionsList(): Promise<ActiveTransactionRow[]> {
+  const rows = await db
+    .select({
+      id: transactions.id,
+      address: transactions.address,
+      city: transactions.city,
+      transactionType: transactions.transactionType,
+      status: transactions.status,
+      expectedCloseDate: transactions.expectedCloseDate,
+      sellerAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.sellerAgentId})`,
+      buyerAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.buyerAgentId})`,
+    })
+    .from(transactions)
+    .where(inArray(transactions.status, ['active', 'in_escrow']))
+    .orderBy(asc(transactions.expectedCloseDate));
+
+  if (rows.length === 0) return [];
+
+  const taskCounts = await db
+    .select({
+      transactionId: transactionTasks.transactionId,
+      total: count(),
+      completed: sql<number>`sum(case when ${transactionTasks.status} = 'completed' then 1 else 0 end)`,
+    })
+    .from(transactionTasks)
+    .where(inArray(transactionTasks.transactionId, rows.map((r) => r.id)))
+    .groupBy(transactionTasks.transactionId);
+
+  const countMap = new Map(
+    taskCounts.map((r) => [r.transactionId, { total: r.total, completed: Number(r.completed ?? 0) }]),
+  );
+
+  return rows.map((r) => {
+    const counts = countMap.get(r.id) ?? { total: 0, completed: 0 };
+    return { ...r, totalTasks: counts.total, completedTasks: counts.completed };
+  });
 }
 
 export async function getTransactionById(id: string): Promise<TransactionDetail | null> {

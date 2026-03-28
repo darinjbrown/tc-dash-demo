@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Activity, CalendarCheck, AlertTriangle, CalendarRange } from 'lucide-react';
+import { CalendarClock, CalendarCheck, AlertTriangle, CalendarRange } from 'lucide-react';
 import type { DashboardStats } from '@/actions/tasks';
 import { cn } from '@/lib/utils';
 
@@ -10,12 +10,12 @@ interface StatsCardsProps {
 export function StatsCards({ stats }: StatsCardsProps) {
   const cards = [
     {
-      title: 'Active Transactions',
-      value: stats.activeTransactions,
-      icon: Activity,
-      description: 'In progress or in escrow',
-      valueClass: '',
-      cardClass: '',
+      title: 'Due Today',
+      value: stats.tasksDueToday,
+      icon: CalendarClock,
+      description: 'Tasks due today',
+      valueClass: stats.tasksDueToday > 0 ? 'text-amber-600 dark:text-amber-400' : '',
+      cardClass: stats.tasksDueToday > 0 ? 'border-amber-400/40' : '',
     },
     {
       title: 'Due This Week',
@@ -34,17 +34,17 @@ export function StatsCards({ stats }: StatsCardsProps) {
       cardClass: stats.overdueTasks > 0 ? 'border-destructive/40' : '',
     },
     {
-      title: 'Closing This Month',
-      value: stats.closingThisMonth,
+      title: 'Closing in 30 Days',
+      value: stats.closingNext30Days,
       icon: CalendarRange,
-      description: 'Expected to close this month',
+      description: 'Expected to close within 30 days',
       valueClass: '',
       cardClass: '',
     },
   ];
 
   return (
-    <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 grid-cols-2">
       {cards.map((card) => {
         const Icon = card.icon;
         return (
