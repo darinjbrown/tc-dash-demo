@@ -76,16 +76,21 @@ export function AppSidebar() {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild tooltip={brand.name}>
+            <SidebarMenuButton
+              size="lg"
+              asChild
+              tooltip={brand.name}
+              className="h-auto gap-4 overflow-visible [&>span:last-child]:whitespace-normal [&>span:last-child]:overflow-visible [&>span:last-child]:[text-overflow:unset]"
+            >
               <Link href="/dashboard">
                 {/* Full logo at natural aspect ratio — no width constraint */}
                 <img
                   src={brand.logo}
                   alt={brand.name}
-                  className="h-9 w-auto object-contain shrink-0"
+                  className="h-16 w-auto object-contain shrink-0"
                 />
                 {/* Tagline — hidden automatically in collapsed icon-only mode */}
-                <span className="text-xs text-muted-foreground leading-tight truncate">
+                <span className="flex-1 text-center text-base text-muted-foreground leading-snug">
                   {brand.tagline}
                 </span>
               </Link>
