@@ -83,6 +83,8 @@ export const transactions = sqliteTable('transactions', {
   state: text('state').default('CA'),
   zipCode: text('zip_code'),
   mlsNumber: text('mls_number'),
+  // Legacy column — retained to match DB; not used in application logic
+  agentId: text('agent_id').references(() => agents.id),
   // sellerAgentId = in-house agent representing the Seller (was listingAgentId)
   sellerAgentId: text('listing_agent_id').references(() => agents.id),
   sellerAgentIsInHouse: integer('seller_agent_is_in_house', { mode: 'boolean' }).default(false),
@@ -137,8 +139,23 @@ export const transactions = sqliteTable('transactions', {
     .$defaultFn(() => new Date()),
 });
 
+export const taskTemplateGroups = sqliteTable('task_template_groups', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  transactionType: text('transaction_type', {
+    enum: ['listing', 'purchase', 'dual', 'all'],
+  }).notNull(),
+  isDefault: integer('is_default', { mode: 'boolean' }).default(false).notNull(),
+  isActive: integer('is_active', { mode: 'boolean' }).default(true).notNull(),
+  sortOrder: integer('sort_order').default(0).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
+    .$defaultFn(() => new Date()),
+});
+
 export const taskTemplates = sqliteTable('task_templates', {
   id: text('id').primaryKey(),
+  templateGroupId: text('template_group_id').references(() => taskTemplateGroups.id),
   name: text('name').notNull(),
   description: text('description'),
   category: text('category', {
@@ -156,11 +173,8 @@ export const taskTemplates = sqliteTable('task_templates', {
       'listing',
     ],
   }).notNull(),
-  transactionType: text('transaction_type', {
-    enum: ['listing', 'purchase', 'both'],
-  })
-    .default('both')
-    .notNull(),
+  // Legacy column — retained to match DB; not used in application logic
+  transactionType: text('transaction_type').default('both'),
   // positive = days AFTER milestone, negative = days BEFORE milestone
   relativeDueDays: integer('relative_due_days').notNull(),
   relativeTo: text('relative_to', {
@@ -271,7 +285,15 @@ export const transactionsRelations = relations(transactions, ({ one, many }) => 
   activityLog: many(activityLog),
 }));
 
-export const taskTemplatesRelations = relations(taskTemplates, ({ many }) => ({
+export const taskTemplateGroupsRelations = relations(taskTemplateGroups, ({ many }) => ({
+  taskTemplates: many(taskTemplates),
+}));
+
+export const taskTemplatesRelations = relations(taskTemplates, ({ one, many }) => ({
+  group: one(taskTemplateGroups, {
+    fields: [taskTemplates.templateGroupId],
+    references: [taskTemplateGroups.id],
+  }),
   transactionTasks: many(transactionTasks),
 }));
 
@@ -301,6 +323,8 @@ export type Agent = typeof agents.$inferSelect;
 export type NewAgent = typeof agents.$inferInsert;
 export type Transaction = typeof transactions.$inferSelect;
 export type NewTransaction = typeof transactions.$inferInsert;
+export type TaskTemplateGroup = typeof taskTemplateGroups.$inferSelect;
+export type NewTaskTemplateGroup = typeof taskTemplateGroups.$inferInsert;
 export type TaskTemplate = typeof taskTemplates.$inferSelect;
 export type NewTaskTemplate = typeof taskTemplates.$inferInsert;
 export type TransactionTask = typeof transactionTasks.$inferSelect;

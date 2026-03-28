@@ -1,8 +1,10 @@
 'use server';
 
 import { db } from '@/db/client';
-import { transactionTasks, transactions, taskTemplates } from '@/db/schema';
-import type { TaskTemplate } from '@/db/schema';
+import { transactionTasks, transactions, taskTemplates, taskTemplateGroups } from '@/db/schema';
+import type { TaskTemplate, TaskTemplateGroup } from '@/db/schema';
+import { templateGroupSchema } from '@/lib/template-group-schema';
+import type { TemplateGroupFormValues } from '@/lib/template-group-schema';
 import {
   eq,
   and,
@@ -322,13 +324,13 @@ export async function snoozeTask(
   }
 }
 
-// ─── Task Template CRUD (used by Settings page) ───────────────────────────────
+// ─── Task Template CRUD (used by Templates page) ──────────────────────────────
 
 export type TaskTemplateFormValues = {
   name: string;
   description?: string;
   category: string;
-  transactionType: 'listing' | 'purchase' | 'both';
+  templateGroupId: string;
   relativeDueDays: number;
   relativeTo: string;
   sortOrder: number;
@@ -352,7 +354,7 @@ const templateSchema = z.object({
     'post_closing',
     'listing',
   ]),
-  transactionType: z.enum(['listing', 'purchase', 'both']),
+  templateGroupId: z.string().min(1, 'Template group is required'),
   relativeDueDays: z.number().int(),
   relativeTo: z.enum([
     'acceptance_date',
@@ -368,6 +370,167 @@ const templateSchema = z.object({
   isActive: z.boolean(),
 });
 
+export async function getTaskTemplateGroups(): Promise<TaskTemplateGroup[]> {
+  return db
+    .select()
+    .from(taskTemplateGroups)
+    .orderBy(asc(taskTemplateGroups.sortOrder), asc(taskTemplateGroups.createdAt));
+}
+
+export async function createTaskTemplateGroup(
+  data: TemplateGroupFormValues,
+): Promise<{ success: boolean; data?: TaskTemplateGroup; clonedTasks?: TaskTemplate[]; error?: string }> {
+  const parsed = templateGroupSchema.safeParse(data);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
+  }
+  const v = parsed.data;
+  try {
+    const id = crypto.randomUUID();
+    const now = new Date();
+    await db.insert(taskTemplateGroups).values({
+      id,
+      name: v.name,
+      description: v.description?.trim() || null,
+      transactionType: v.transactionType,
+      isDefault: false,
+      isActive: true,
+      sortOrder: v.sortOrder ?? 100,
+      createdAt: now,
+    });
+    const [created] = await db
+      .select()
+      .from(taskTemplateGroups)
+      .where(eq(taskTemplateGroups.id, id));
+
+    // Clone tasks from the matching built-in group (if one exists for this type)
+    let clonedTasks: TaskTemplate[] = [];
+    if (v.transactionType !== 'all') {
+      const [sourceGroup] = await db
+        .select()
+        .from(taskTemplateGroups)
+        .where(
+          and(
+            eq(taskTemplateGroups.transactionType, v.transactionType),
+            eq(taskTemplateGroups.isDefault, true),
+          ),
+        );
+
+      if (sourceGroup) {
+        const sourceTasks = await db
+          .select()
+          .from(taskTemplates)
+          .where(eq(taskTemplates.templateGroupId, sourceGroup.id))
+          .orderBy(asc(taskTemplates.sortOrder));
+
+        if (sourceTasks.length > 0) {
+          const cloneRows = sourceTasks.map((t) => ({
+            id: crypto.randomUUID(),
+            templateGroupId: id,
+            name: t.name,
+            description: t.description,
+            category: t.category,
+            relativeDueDays: t.relativeDueDays,
+            relativeTo: t.relativeTo,
+            sortOrder: t.sortOrder,
+            isRequired: t.isRequired,
+            isActive: t.isActive,
+            createdAt: now,
+          }));
+          await db.insert(taskTemplates).values(cloneRows);
+          clonedTasks = await db
+            .select()
+            .from(taskTemplates)
+            .where(eq(taskTemplates.templateGroupId, id))
+            .orderBy(asc(taskTemplates.sortOrder));
+        }
+      }
+    }
+
+    revalidatePath('/templates');
+    return { success: true, data: created, clonedTasks };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Failed to create template' };
+  }
+}
+
+export async function updateTaskTemplateGroup(
+  id: string,
+  data: TemplateGroupFormValues,
+): Promise<{ success: boolean; data?: TaskTemplateGroup; error?: string }> {
+  const parsed = templateGroupSchema.safeParse(data);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
+  }
+  const v = parsed.data;
+  try {
+    const [existing] = await db
+      .select({ isDefault: taskTemplateGroups.isDefault })
+      .from(taskTemplateGroups)
+      .where(eq(taskTemplateGroups.id, id));
+    if (!existing) return { success: false, error: 'Template group not found' };
+
+    await db
+      .update(taskTemplateGroups)
+      .set({
+        name: v.name,
+        description: v.description?.trim() || null,
+        // Don't allow changing transactionType on built-in groups
+        ...(existing.isDefault ? {} : { transactionType: v.transactionType }),
+        sortOrder: v.sortOrder ?? 100,
+      })
+      .where(eq(taskTemplateGroups.id, id));
+    const [updated] = await db
+      .select()
+      .from(taskTemplateGroups)
+      .where(eq(taskTemplateGroups.id, id));
+    revalidatePath('/templates');
+    return { success: true, data: updated };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Failed to update template' };
+  }
+}
+
+export async function deleteTaskTemplateGroup(
+  id: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const [group] = await db
+      .select({ isDefault: taskTemplateGroups.isDefault })
+      .from(taskTemplateGroups)
+      .where(eq(taskTemplateGroups.id, id));
+    if (!group) return { success: false, error: 'Template group not found' };
+    if (group.isDefault) return { success: false, error: 'Built-in templates cannot be deleted' };
+
+    await db.delete(taskTemplateGroups).where(eq(taskTemplateGroups.id, id));
+    revalidatePath('/templates');
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Failed to delete template' };
+  }
+}
+
+export async function toggleTaskTemplateGroupActive(
+  id: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const [group] = await db
+      .select({ isActive: taskTemplateGroups.isActive })
+      .from(taskTemplateGroups)
+      .where(eq(taskTemplateGroups.id, id));
+    if (!group) return { success: false, error: 'Template group not found' };
+
+    await db
+      .update(taskTemplateGroups)
+      .set({ isActive: !group.isActive })
+      .where(eq(taskTemplateGroups.id, id));
+    revalidatePath('/templates');
+    return { success: true };
+  } catch {
+    return { success: false, error: 'Failed to update template group' };
+  }
+}
+
 export async function getTaskTemplates(): Promise<TaskTemplate[]> {
   return db
     .select()
@@ -375,9 +538,52 @@ export async function getTaskTemplates(): Promise<TaskTemplate[]> {
     .orderBy(asc(taskTemplates.sortOrder), desc(taskTemplates.createdAt));
 }
 
+export async function createTaskTemplatesMulti(
+  data: Omit<TaskTemplateFormValues, 'templateGroupId'>,
+  groupIds: string[],
+): Promise<{ success: boolean; data?: TaskTemplate[]; error?: string }> {
+  if (!groupIds.length) return { success: false, error: 'At least one template group is required' };
+
+  const baseSchema = templateSchema.omit({ templateGroupId: true });
+  const parsed = baseSchema.safeParse(data);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
+  }
+  const v = parsed.data;
+
+  try {
+    const rows = groupIds.map((gid) => ({
+      id: crypto.randomUUID(),
+      templateGroupId: gid,
+      name: v.name,
+      description: v.description?.trim() || null,
+      category: v.category,
+      relativeDueDays: v.relativeDueDays,
+      relativeTo: v.relativeTo,
+      sortOrder: v.sortOrder,
+      isRequired: v.isRequired,
+      isActive: v.isActive,
+    }));
+
+    await db.insert(taskTemplates).values(rows);
+
+    const ids = rows.map((r) => r.id);
+    const created = await db
+      .select()
+      .from(taskTemplates)
+      .where(sql`${taskTemplates.id} IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})`);
+
+    revalidatePath('/templates');
+    return { success: true, data: created };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to create tasks';
+    return { success: false, error: message };
+  }
+}
+
 export async function createTaskTemplate(
   data: TaskTemplateFormValues,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: TaskTemplate; error?: string }> {
   const parsed = templateSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
@@ -385,22 +591,24 @@ export async function createTaskTemplate(
   const v = parsed.data;
 
   try {
+    const id = crypto.randomUUID();
     await db.insert(taskTemplates).values({
-      id: crypto.randomUUID(),
+      id,
+      templateGroupId: v.templateGroupId,
       name: v.name,
       description: v.description?.trim() || null,
       category: v.category,
-      transactionType: v.transactionType,
       relativeDueDays: v.relativeDueDays,
       relativeTo: v.relativeTo,
       sortOrder: v.sortOrder,
       isRequired: v.isRequired,
       isActive: v.isActive,
     });
-    revalidatePath('/settings');
-    return { success: true };
+    const [created] = await db.select().from(taskTemplates).where(eq(taskTemplates.id, id));
+    revalidatePath('/templates');
+    return { success: true, data: created };
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to create template';
+    const message = err instanceof Error ? err.message : 'Failed to create task';
     return { success: false, error: message };
   }
 }
@@ -408,7 +616,7 @@ export async function createTaskTemplate(
 export async function updateTaskTemplate(
   id: string,
   data: TaskTemplateFormValues,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: TaskTemplate; error?: string }> {
   const parsed = templateSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
@@ -419,10 +627,10 @@ export async function updateTaskTemplate(
     await db
       .update(taskTemplates)
       .set({
+        templateGroupId: v.templateGroupId,
         name: v.name,
         description: v.description?.trim() || null,
         category: v.category,
-        transactionType: v.transactionType,
         relativeDueDays: v.relativeDueDays,
         relativeTo: v.relativeTo,
         sortOrder: v.sortOrder,
@@ -430,11 +638,30 @@ export async function updateTaskTemplate(
         isActive: v.isActive,
       })
       .where(eq(taskTemplates.id, id));
-    revalidatePath('/settings');
+    const [updated] = await db.select().from(taskTemplates).where(eq(taskTemplates.id, id));
+    revalidatePath('/templates');
+    return { success: true, data: updated };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to update task';
+    return { success: false, error: message };
+  }
+}
+
+export async function deleteTaskTemplate(
+  id: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const [template] = await db
+      .select({ id: taskTemplates.id })
+      .from(taskTemplates)
+      .where(eq(taskTemplates.id, id));
+    if (!template) return { success: false, error: 'Task not found' };
+
+    await db.delete(taskTemplates).where(eq(taskTemplates.id, id));
+    revalidatePath('/templates');
     return { success: true };
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to update template';
-    return { success: false, error: message };
+    return { success: false, error: err instanceof Error ? err.message : 'Failed to delete task' };
   }
 }
 
@@ -454,9 +681,9 @@ export async function toggleTaskTemplateActive(
       .set({ isActive: !template.isActive })
       .where(eq(taskTemplates.id, id));
 
-    revalidatePath('/settings');
+    revalidatePath('/templates');
     return { success: true };
   } catch {
-    return { success: false, error: 'Failed to update template' };
+    return { success: false, error: 'Failed to update task' };
   }
 }

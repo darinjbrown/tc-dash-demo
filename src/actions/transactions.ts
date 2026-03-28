@@ -4,6 +4,7 @@ import { db } from '@/db/client';
 import {
   transactions,
   taskTemplates,
+  taskTemplateGroups,
   transactionTasks,
   activityLog,
 } from '@/db/schema';
@@ -157,6 +158,7 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
       state: transactions.state,
       zipCode: transactions.zipCode,
       mlsNumber: transactions.mlsNumber,
+      agentId: transactions.agentId,
       sellerAgentId: transactions.sellerAgentId,
       sellerAgentIsInHouse: transactions.sellerAgentIsInHouse,
       buyerAgentId: transactions.buyerAgentId,
@@ -309,13 +311,12 @@ export async function createTransaction(
     await db.insert(transactions).values(newTx);
 
     // Stamp tasks from active templates
-    const templates = await db
-      .select()
-      .from(taskTemplates)
-      .where(eq(taskTemplates.isActive, true))
-      .orderBy(asc(taskTemplates.sortOrder));
+    const [templates, groups] = await Promise.all([
+      db.select().from(taskTemplates).where(eq(taskTemplates.isActive, true)).orderBy(asc(taskTemplates.sortOrder)),
+      db.select().from(taskTemplateGroups),
+    ]);
 
-    const stamped = stampTasks(newTx as Parameters<typeof stampTasks>[0], templates);
+    const stamped = stampTasks(newTx as Parameters<typeof stampTasks>[0], templates, groups);
     if (stamped.length > 0) {
       await db
         .insert(transactionTasks)

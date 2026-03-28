@@ -1,13 +1,10 @@
 import { auth } from '@/lib/auth';
-import { getTaskTemplates } from '@/actions/tasks';
 import { SettingsTabs } from './_components/settings-tabs';
 import { redirect } from 'next/navigation';
 
 export default async function SettingsPage() {
   const session = await auth();
   if (!session?.user) redirect('/login');
-
-  const templates = await getTaskTemplates();
 
   const user = {
     name: session.user.name ?? null,
@@ -19,11 +16,11 @@ export default async function SettingsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Manage your profile, task templates, and branding.
+          Manage your profile and branding.
         </p>
       </div>
 
-      <SettingsTabs user={user} templates={templates} />
+      <SettingsTabs user={user} />
     </div>
   );
 }

@@ -47,8 +47,6 @@ export function PendingRequestsCard({ initialRequests }: PendingRequestsCardProp
   const [approvedInfo, setApprovedInfo] = useState<{ name: string; tempPassword: string } | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  if (requests.length === 0) return null;
-
   function handleApprove(request: AccessRequest) {
     const role = roles[request.id] ?? 'tc';
     startTransition(async () => {
@@ -84,9 +82,11 @@ export function PendingRequestsCard({ initialRequests }: PendingRequestsCardProp
 
   const denyingRequest = requests.find((r) => r.id === denyingId);
 
+  if (requests.length === 0 && !approvedInfo) return null;
+
   return (
     <>
-      <Card className="border-amber-200 dark:border-amber-800">
+      {requests.length > 0 && <Card className="border-amber-200 dark:border-amber-800">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
@@ -186,7 +186,7 @@ export function PendingRequestsCard({ initialRequests }: PendingRequestsCardProp
             </div>
           ))}
         </CardContent>
-      </Card>
+      </Card>}
 
       {/* Deny confirmation */}
       <AlertDialog open={!!denyingId} onOpenChange={(open) => !open && setDenyingId(null)}>

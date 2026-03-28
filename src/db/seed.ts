@@ -89,6 +89,7 @@ async function seed() {
   await db.delete(schema.activityLog);
   await db.delete(schema.transactionTasks);
   await db.delete(schema.taskTemplates);
+  await db.delete(schema.taskTemplateGroups);
   await db.delete(schema.transactions);
   await db.delete(schema.agents);
   await db.delete(schema.sessions);
@@ -151,21 +152,66 @@ async function seed() {
     },
   ]);
 
+  // ── Template groups ────────────────────────────────────────────────────
+  console.log('  Seeding task template groups...');
+  const listingGroupId = uuid();
+  const purchaseGroupId = uuid();
+  const dualGroupId = uuid();
+
+  await db.insert(schema.taskTemplateGroups).values([
+    {
+      id: listingGroupId,
+      name: 'Listing Template',
+      description: 'Tasks for listing transactions',
+      transactionType: 'listing',
+      isDefault: true,
+      isActive: true,
+      sortOrder: 0,
+      createdAt: new Date(),
+    },
+    {
+      id: purchaseGroupId,
+      name: 'Purchase Template',
+      description: 'Tasks for purchase transactions',
+      transactionType: 'purchase',
+      isDefault: true,
+      isActive: true,
+      sortOrder: 1,
+      createdAt: new Date(),
+    },
+    {
+      id: dualGroupId,
+      name: 'Dual Agency Template',
+      description: 'Additional tasks specific to dual agency transactions',
+      transactionType: 'dual',
+      isDefault: true,
+      isActive: true,
+      sortOrder: 2,
+      createdAt: new Date(),
+    },
+  ]);
+  console.log('    → 3 template groups inserted');
+
   // ── Task templates ─────────────────────────────────────────────────────
   console.log('  Seeding task templates...');
-  const templateRows = defaultTaskTemplates.map((t) => ({
-    id: uuid(),
-    name: t.name,
-    description: t.description ?? null,
-    category: t.category,
-    transactionType: t.transactionType,
-    relativeDueDays: t.relativeDueDays,
-    relativeTo: t.relativeTo,
-    sortOrder: t.sortOrder,
-    isRequired: t.isRequired !== false,
-    isActive: true,
-    createdAt: new Date(),
-  }));
+  const templateRows = defaultTaskTemplates.map((t) => {
+    // Map old transactionType to group: listing → Listing, purchase/both → Purchase
+    const templateGroupId =
+      t.transactionType === 'listing' ? listingGroupId : purchaseGroupId;
+    return {
+      id: uuid(),
+      templateGroupId,
+      name: t.name,
+      description: t.description ?? null,
+      category: t.category,
+      relativeDueDays: t.relativeDueDays,
+      relativeTo: t.relativeTo,
+      sortOrder: t.sortOrder,
+      isRequired: t.isRequired !== false,
+      isActive: true,
+      createdAt: new Date(),
+    };
+  });
   await db.insert(schema.taskTemplates).values(templateRows);
   console.log(`    → ${templateRows.length} templates inserted`);
 
@@ -448,13 +494,26 @@ async function seed() {
   // ── Stamp transaction tasks ────────────────────────────────────────────
   console.log('  Stamping transaction tasks...');
 
+  const allGroups = await db.select().from(schema.taskTemplateGroups);
   const allTemplates = await db.select().from(schema.taskTemplates);
   const allTasks: schema.NewTransactionTask[] = [];
 
   for (const tx of transactionData) {
-    // Filter templates that apply to this transaction type
+    // Filter templates by applicable groups for this transaction type
+    const activeGroups = allGroups.filter((g) => g.isActive);
+    const applicableGroupIds = new Set(
+      tx.transactionType === 'dual'
+        ? activeGroups
+            .filter((g) => ['listing', 'purchase', 'dual', 'all'].includes(g.transactionType))
+            .map((g) => g.id)
+        : activeGroups
+            .filter(
+              (g) => g.transactionType === tx.transactionType || g.transactionType === 'all',
+            )
+            .map((g) => g.id),
+    );
     const applicableTemplates = allTemplates.filter(
-      (t) => t.transactionType === 'both' || t.transactionType === tx.transactionType,
+      (t) => t.isActive && t.templateGroupId !== null && applicableGroupIds.has(t.templateGroupId),
     );
 
     for (const template of applicableTemplates) {

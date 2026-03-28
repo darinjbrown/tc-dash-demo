@@ -1,5 +1,5 @@
 import { addDays, parseISO, format } from 'date-fns';
-import type { TaskTemplate, Transaction } from '@/db/schema';
+import type { TaskTemplate, TaskTemplateGroup, Transaction } from '@/db/schema';
 
 // Map relativeTo keys to transaction fields
 function getMilestoneDate(tx: Transaction, relativeTo: string): string | null {
@@ -46,13 +46,39 @@ export type StampedTask = {
   sortOrder: number;
 };
 
+function getApplicableGroupIds(
+  transactionType: string,
+  groups: TaskTemplateGroup[],
+): Set<string> {
+  const active = groups.filter((g) => g.isActive);
+  if (transactionType === 'dual') {
+    // Dual agency group is self-contained (populated via repair-dual-tasks.ts).
+    // Also include 'all' groups for any shared additions, but do NOT inherit
+    // listing/purchase groups — the dual group already contains those tasks.
+    return new Set(
+      active
+        .filter((g) => g.transactionType === 'dual' || g.transactionType === 'all')
+        .map((g) => g.id),
+    );
+  }
+  return new Set(
+    active
+      .filter((g) => g.transactionType === transactionType || g.transactionType === 'all')
+      .map((g) => g.id),
+  );
+}
+
 // Stamp task templates onto a transaction, calculating due dates from milestone dates.
-// Only includes templates matching the transaction type.
-export function stampTasks(transaction: Transaction, templates: TaskTemplate[]): StampedTask[] {
+// Only includes templates belonging to groups that match the transaction type.
+export function stampTasks(
+  transaction: Transaction,
+  templates: TaskTemplate[],
+  groups: TaskTemplateGroup[],
+): StampedTask[] {
+  const applicableGroupIds = getApplicableGroupIds(transaction.transactionType, groups);
+
   const applicable = templates.filter(
-    (t) =>
-      t.isActive &&
-      (t.transactionType === 'both' || t.transactionType === transaction.transactionType),
+    (t) => t.isActive && t.templateGroupId !== null && applicableGroupIds.has(t.templateGroupId),
   );
 
   return applicable.map((t) => ({
