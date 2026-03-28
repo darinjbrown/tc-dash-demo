@@ -1,6 +1,6 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -24,9 +24,9 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { createTaskTemplate, updateTaskTemplate } from '@/actions/tasks';
+import { createTaskTemplatesMulti, updateTaskTemplate } from '@/actions/tasks';
 import type { TaskTemplateFormValues } from '@/actions/tasks';
-import type { TaskTemplate } from '@/db/schema';
+import type { TaskTemplate, TaskTemplateGroup } from '@/db/schema';
 
 const templateFormSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -44,7 +44,7 @@ const templateFormSchema = z.object({
     'post_closing',
     'listing',
   ]),
-  transactionType: z.enum(['listing', 'purchase', 'both']),
+  templateGroupId: z.string().min(1),
   relativeDueDays: z.number().int(),
   relativeTo: z.enum([
     'acceptance_date',
@@ -88,14 +88,38 @@ const RELATIVE_TO_OPTIONS = [
 
 interface TemplateFormProps {
   template?: TaskTemplate | null;
+  templateGroupId: string;
+  allGroups: TaskTemplateGroup[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
+  onSuccess: (tasks: TaskTemplate[]) => void;
 }
 
-export function TemplateForm({ template, open, onOpenChange, onSuccess }: TemplateFormProps) {
+export function TemplateForm({
+  template,
+  templateGroupId,
+  allGroups,
+  open,
+  onOpenChange,
+  onSuccess,
+}: TemplateFormProps) {
   const [isPending, startTransition] = useTransition();
   const isEdit = !!template;
+
+  // Multi-group selection — create mode only
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([templateGroupId]);
+
+  // Reset selected groups when the dialog opens
+  function handleOpenChange(val: boolean) {
+    if (val) setSelectedGroupIds([templateGroupId]);
+    onOpenChange(val);
+  }
+
+  function toggleGroup(id: string) {
+    setSelectedGroupIds((prev) =>
+      prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id],
+    );
+  }
 
   const {
     register,
@@ -110,7 +134,7 @@ export function TemplateForm({ template, open, onOpenChange, onSuccess }: Templa
           name: template.name,
           description: template.description ?? '',
           category: template.category,
-          transactionType: template.transactionType,
+          templateGroupId: template.templateGroupId ?? templateGroupId,
           relativeDueDays: template.relativeDueDays,
           relativeTo: template.relativeTo,
           sortOrder: template.sortOrder,
@@ -121,7 +145,7 @@ export function TemplateForm({ template, open, onOpenChange, onSuccess }: Templa
           name: '',
           description: '',
           category: 'closing' as const,
-          transactionType: 'both' as const,
+          templateGroupId,
           relativeDueDays: 0,
           relativeTo: 'escrow_open' as const,
           sortOrder: 100,
@@ -132,39 +156,50 @@ export function TemplateForm({ template, open, onOpenChange, onSuccess }: Templa
 
   function onSubmit(data: FormValues) {
     startTransition(async () => {
-      const payload: TaskTemplateFormValues = {
-        ...data,
-        description: data.description || undefined,
-      };
-
       if (isEdit) {
+        const payload: TaskTemplateFormValues = {
+          ...data,
+          description: data.description || undefined,
+        };
         const result = await updateTaskTemplate(template.id, payload);
-        if (result.success) {
-          toast.success('Template updated');
+        if (result.success && result.data) {
+          toast.success('Task updated');
           onOpenChange(false);
-          onSuccess();
+          onSuccess([result.data]);
         } else {
-          toast.error(result.error ?? 'Failed to update template');
+          toast.error(result.error ?? 'Failed to update task');
         }
       } else {
-        const result = await createTaskTemplate(payload);
-        if (result.success) {
-          toast.success('Template created');
+        if (selectedGroupIds.length === 0) {
+          toast.error('Select at least one template group');
+          return;
+        }
+        const { templateGroupId: _ignored, ...rest } = data;
+        const result = await createTaskTemplatesMulti(
+          { ...rest, description: rest.description || undefined },
+          selectedGroupIds,
+        );
+        if (result.success && result.data) {
+          toast.success(
+            result.data.length === 1
+              ? 'Task created'
+              : `Task created in ${result.data.length} templates`,
+          );
           onOpenChange(false);
           reset();
-          onSuccess();
+          onSuccess(result.data);
         } else {
-          toast.error(result.error ?? 'Failed to create template');
+          toast.error(result.error ?? 'Failed to create task');
         }
       }
     });
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEdit ? 'Edit Template' : 'Add Task Template'}</DialogTitle>
+          <DialogTitle>{isEdit ? 'Edit Task' : 'Add Task'}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
@@ -179,11 +214,34 @@ export function TemplateForm({ template, open, onOpenChange, onSuccess }: Templa
             <Textarea id="t-desc" {...register('description')} rows={2} placeholder="Optional details..." />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label>Category *</Label>
+            <Controller
+              name="category"
+              control={control}
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </div>
+
+          {/* Template group — single select in edit mode, multi-checkbox in create mode */}
+          {isEdit ? (
             <div className="space-y-1.5">
-              <Label>Category *</Label>
+              <Label>Template Group *</Label>
               <Controller
-                name="category"
+                name="templateGroupId"
                 control={control}
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
@@ -191,9 +249,9 @@ export function TemplateForm({ template, open, onOpenChange, onSuccess }: Templa
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {CATEGORIES.map((c) => (
-                        <SelectItem key={c.value} value={c.value}>
-                          {c.label}
+                      {allGroups.map((g) => (
+                        <SelectItem key={g.id} value={g.id}>
+                          {g.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -201,27 +259,28 @@ export function TemplateForm({ template, open, onOpenChange, onSuccess }: Templa
                 )}
               />
             </div>
-
+          ) : (
             <div className="space-y-1.5">
-              <Label>Transaction Type *</Label>
-              <Controller
-                name="transactionType"
-                control={control}
-                render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="both">Both</SelectItem>
-                      <SelectItem value="listing">Listing Only</SelectItem>
-                      <SelectItem value="purchase">Purchase Only</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              />
+              <Label>Add to Templates *</Label>
+              <div className="rounded-md border divide-y">
+                {allGroups.map((g) => (
+                  <label
+                    key={g.id}
+                    className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/50"
+                  >
+                    <Checkbox
+                      checked={selectedGroupIds.includes(g.id)}
+                      onCheckedChange={() => toggleGroup(g.id)}
+                    />
+                    <span className="text-sm font-medium">{g.name}</span>
+                  </label>
+                ))}
+              </div>
+              {selectedGroupIds.length === 0 && (
+                <p className="text-xs text-destructive">Select at least one template</p>
+              )}
             </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -269,6 +328,7 @@ export function TemplateForm({ template, open, onOpenChange, onSuccess }: Templa
               {...register('sortOrder', { valueAsNumber: true })}
               placeholder="100"
             />
+            <p className="text-xs text-muted-foreground">Lower numbers appear first. Tasks are sorted relative to each other (e.g. 10, 20, 30).</p>
           </div>
 
           <div className="flex gap-6">
@@ -316,14 +376,14 @@ export function TemplateForm({ template, open, onOpenChange, onSuccess }: Templa
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isPending}>
+            <Button type="submit" disabled={isPending || (!isEdit && selectedGroupIds.length === 0)}>
               {isPending
                 ? isEdit
                   ? 'Saving...'
-                  : 'Creating...'
+                  : 'Adding...'
                 : isEdit
-                  ? 'Save Changes'
-                  : 'Create Template'}
+                  ? 'Save Task'
+                  : 'Add Task'}
             </Button>
           </DialogFooter>
         </form>

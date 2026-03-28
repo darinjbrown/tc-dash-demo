@@ -1,5 +1,5 @@
 import { auth } from '@/lib/auth';
-import { getTaskTemplates } from '@/actions/tasks';
+import { getTaskTemplates, getTaskTemplateGroups } from '@/actions/tasks';
 import { redirect } from 'next/navigation';
 import { TemplatesTab } from '@/components/settings/templates-tab';
 
@@ -7,7 +7,7 @@ export default async function TemplatesPage() {
   const session = await auth();
   if (!session?.user) redirect('/login');
 
-  const templates = await getTaskTemplates();
+  const [groups, templates] = await Promise.all([getTaskTemplateGroups(), getTaskTemplates()]);
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
@@ -18,7 +18,7 @@ export default async function TemplatesPage() {
         </p>
       </div>
 
-      <TemplatesTab initialTemplates={templates} />
+      <TemplatesTab initialGroups={groups} initialTemplates={templates} />
     </div>
   );
 }
