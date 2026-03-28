@@ -19,12 +19,17 @@ export interface TaskTemplateData {
   transactionType: 'listing' | 'purchase' | 'both';
   relativeDueDays: number;
   relativeTo:
+    | 'contract_date'
     | 'acceptance_date'
-    | 'escrow_open'
-    | 'expected_close_date'
+    | 'verification_of_funds_date'
+    | 'earnest_money_due_date'
     | 'inspection_contingency_date'
+    | 'insurance_contingency_date'
+    | 'loan_contingency_date'
     | 'appraisal_contingency_date'
-    | 'loan_contingency_date';
+    | 'hoa_docs_due_date'
+    | 'listing_active_date'
+    | 'expected_close_date';
   sortOrder: number;
   isRequired?: boolean;
 }
@@ -78,14 +83,14 @@ export const defaultTaskTemplates: TaskTemplateData[] = [
     sortOrder: 50,
   },
 
-  // ── Disclosures (relative to escrow_open) ───────────────────────────────
+  // ── Disclosures (relative to acceptance_date) ───────────────────────────
   {
     name: 'Send TDS to buyer',
     description: 'Deliver Transfer Disclosure Statement (TDS) to buyer.',
     category: 'disclosures',
     transactionType: 'purchase',
     relativeDueDays: 3,
-    relativeTo: 'escrow_open',
+    relativeTo: 'acceptance_date',
     sortOrder: 60,
   },
   {
@@ -94,7 +99,7 @@ export const defaultTaskTemplates: TaskTemplateData[] = [
     category: 'disclosures',
     transactionType: 'purchase',
     relativeDueDays: 3,
-    relativeTo: 'escrow_open',
+    relativeTo: 'acceptance_date',
     sortOrder: 70,
   },
   {
@@ -103,7 +108,7 @@ export const defaultTaskTemplates: TaskTemplateData[] = [
     category: 'disclosures',
     transactionType: 'both',
     relativeDueDays: 5,
-    relativeTo: 'escrow_open',
+    relativeTo: 'acceptance_date',
     sortOrder: 80,
   },
   {
@@ -112,7 +117,7 @@ export const defaultTaskTemplates: TaskTemplateData[] = [
     category: 'disclosures',
     transactionType: 'purchase',
     relativeDueDays: 5,
-    relativeTo: 'escrow_open',
+    relativeTo: 'acceptance_date',
     sortOrder: 90,
   },
   {
@@ -121,18 +126,18 @@ export const defaultTaskTemplates: TaskTemplateData[] = [
     category: 'disclosures',
     transactionType: 'purchase',
     relativeDueDays: 7,
-    relativeTo: 'escrow_open',
+    relativeTo: 'acceptance_date',
     sortOrder: 100,
   },
 
-  // ── Inspections (relative to escrow_open) ───────────────────────────────
+  // ── Inspections (relative to acceptance_date) ───────────────────────────
   {
     name: 'Schedule home inspection',
     description: 'Coordinate general home inspection with buyer and inspector.',
     category: 'inspections',
     transactionType: 'purchase',
     relativeDueDays: 3,
-    relativeTo: 'escrow_open',
+    relativeTo: 'acceptance_date',
     sortOrder: 110,
   },
   {
@@ -141,7 +146,7 @@ export const defaultTaskTemplates: TaskTemplateData[] = [
     category: 'inspections',
     transactionType: 'purchase',
     relativeDueDays: 5,
-    relativeTo: 'escrow_open',
+    relativeTo: 'acceptance_date',
     sortOrder: 120,
   },
   {
@@ -150,7 +155,7 @@ export const defaultTaskTemplates: TaskTemplateData[] = [
     category: 'inspections',
     transactionType: 'purchase',
     relativeDueDays: 10,
-    relativeTo: 'escrow_open',
+    relativeTo: 'acceptance_date',
     sortOrder: 130,
   },
   {
@@ -159,7 +164,7 @@ export const defaultTaskTemplates: TaskTemplateData[] = [
     category: 'inspections',
     transactionType: 'purchase',
     relativeDueDays: 12,
-    relativeTo: 'escrow_open',
+    relativeTo: 'acceptance_date',
     sortOrder: 140,
     isRequired: false,
   },
@@ -169,7 +174,7 @@ export const defaultTaskTemplates: TaskTemplateData[] = [
     category: 'inspections',
     transactionType: 'purchase',
     relativeDueDays: 14,
-    relativeTo: 'escrow_open',
+    relativeTo: 'acceptance_date',
     sortOrder: 150,
     isRequired: false,
   },
@@ -209,7 +214,7 @@ export const defaultTaskTemplates: TaskTemplateData[] = [
     category: 'contingencies',
     transactionType: 'purchase',
     relativeDueDays: 10,
-    relativeTo: 'escrow_open',
+    relativeTo: 'acceptance_date',
     sortOrder: 190,
     isRequired: false,
   },
@@ -221,7 +226,7 @@ export const defaultTaskTemplates: TaskTemplateData[] = [
     category: 'loan',
     transactionType: 'purchase',
     relativeDueDays: 7,
-    relativeTo: 'escrow_open',
+    relativeTo: 'acceptance_date',
     sortOrder: 200,
   },
   {
@@ -230,7 +235,7 @@ export const defaultTaskTemplates: TaskTemplateData[] = [
     category: 'appraisal',
     transactionType: 'purchase',
     relativeDueDays: 7,
-    relativeTo: 'escrow_open',
+    relativeTo: 'acceptance_date',
     sortOrder: 210,
   },
   {
@@ -239,7 +244,7 @@ export const defaultTaskTemplates: TaskTemplateData[] = [
     category: 'appraisal',
     transactionType: 'purchase',
     relativeDueDays: 17,
-    relativeTo: 'escrow_open',
+    relativeTo: 'acceptance_date',
     sortOrder: 220,
   },
   {

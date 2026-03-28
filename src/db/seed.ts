@@ -42,23 +42,34 @@ function addDays(isoDate: string, days: number): string {
 /** Calculate a task due date from a transaction's milestone dates. */
 function calcDueDate(
   transaction: {
+    contractDate?: string | null;
     acceptanceDate?: string | null;
-    escrowOpenDate?: string | null;
+    verificationOfFundsDate?: string | null;
+    earnestMoneyDueDate?: string | null;
     expectedCloseDate?: string | null;
     inspectionContingencyDate?: string | null;
-    appraisalContingencyDate?: string | null;
+    insuranceContingencyDate?: string | null;
     loanContingencyDate?: string | null;
+    appraisalContingencyDate?: string | null;
+    hoaDocsDueDate?: string | null;
+    listingActiveDate?: string | null;
   },
   relativeTo: string,
   relativeDueDays: number,
 ): string | null {
   let milestone: string | null | undefined;
   switch (relativeTo) {
+    case 'contract_date':
+      milestone = transaction.contractDate;
+      break;
     case 'acceptance_date':
       milestone = transaction.acceptanceDate;
       break;
-    case 'escrow_open':
-      milestone = transaction.escrowOpenDate;
+    case 'verification_of_funds_date':
+      milestone = transaction.verificationOfFundsDate;
+      break;
+    case 'earnest_money_due_date':
+      milestone = transaction.earnestMoneyDueDate;
       break;
     case 'expected_close_date':
       milestone = transaction.expectedCloseDate;
@@ -66,11 +77,20 @@ function calcDueDate(
     case 'inspection_contingency_date':
       milestone = transaction.inspectionContingencyDate;
       break;
-    case 'appraisal_contingency_date':
-      milestone = transaction.appraisalContingencyDate;
+    case 'insurance_contingency_date':
+      milestone = transaction.insuranceContingencyDate;
       break;
     case 'loan_contingency_date':
       milestone = transaction.loanContingencyDate;
+      break;
+    case 'appraisal_contingency_date':
+      milestone = transaction.appraisalContingencyDate;
+      break;
+    case 'hoa_docs_due_date':
+      milestone = transaction.hoaDocsDueDate;
+      break;
+    case 'listing_active_date':
+      milestone = transaction.listingActiveDate;
       break;
     default:
       milestone = null;
@@ -240,8 +260,7 @@ async function seed() {
       escrowOfficer: 'Janet Park',
       escrowOfficerPhone: '(707) 433-1100',
       escrowOfficerEmail: 'janet@wineescrow.com',
-      titleCompany: 'Fidelity National Title',
-      titleOfficer: 'Robert Kim',
+
       lenderName: 'Wells Fargo Home Mortgage',
       loanOfficer: 'Tom Bradley',
       loanOfficerPhone: '(707) 578-1234',
@@ -250,9 +269,10 @@ async function seed() {
       sellerName: 'Michael Porter',
       purchasePrice: 187500000, // $1,875,000
       earnestMoneyDeposit: 5000000, // $50,000
-      commissionPercent: '2.5',
+      buyerCommissionPercent: '2.5',
+      listingCommissionPercent: '2.5',
+      contractDate: addDays(today, -31),
       acceptanceDate: addDays(today, -30),
-      escrowOpenDate: addDays(today, -28),
       inspectionContingencyDate: addDays(today, -15),
       appraisalContingencyDate: addDays(today, -10),
       loanContingencyDate: addDays(today, -5),
@@ -271,14 +291,15 @@ async function seed() {
       sellerAgentId: agent1Id,
       sellerAgentIsInHouse: true,
       transactionType: 'listing',
-      status: 'active',
+      status: 'listed',
       propertyType: 'condo',
       escrowCompany: 'Redwood Empire Escrow',
       sellerName: 'Grace & Henry Liu',
-      listPrice: 74900000, // $749,000
-      commissionPercent: '2.5',
+      purchasePrice: 74900000, // $749,000
+buyerCommissionPercent: '2.5',
+      listingCommissionPercent: '2.5',
+      contractDate: null,
       acceptanceDate: null,
-      escrowOpenDate: null,
       expectedCloseDate: null,
       createdBy: adminId,
       createdAt: new Date(),
@@ -294,23 +315,24 @@ async function seed() {
       buyerAgentId: agent1Id,
       buyerAgentIsInHouse: true,
       transactionType: 'purchase',
-      status: 'closing',
+      status: 'in_escrow',
       propertyType: 'single_family',
       escrowNumber: 'ESC-26003',
       escrowCompany: 'Sonoma Valley Escrow',
       escrowOfficer: 'Michelle Torres',
       escrowOfficerPhone: '(707) 938-2200',
       escrowOfficerEmail: 'michelle@sonomaescrow.com',
-      titleCompany: 'Chicago Title',
+
       lenderName: 'Bank of America',
       loanOfficer: 'Sandra Lee',
       buyerName: 'James & Patricia Wilson',
       sellerName: 'Steven Hart',
       purchasePrice: 265000000, // $2,650,000
       earnestMoneyDeposit: 8000000, // $80,000
-      commissionPercent: '2.5',
+      buyerCommissionPercent: '2.5',
+      listingCommissionPercent: '2.5',
+      contractDate: addDays(today, -46),
       acceptanceDate: addDays(today, -45),
-      escrowOpenDate: addDays(today, -43),
       inspectionContingencyDate: addDays(today, -30),
       appraisalContingencyDate: addDays(today, -25),
       loanContingencyDate: addDays(today, -20),
@@ -340,16 +362,17 @@ async function seed() {
       escrowOfficer: 'Brian Walsh',
       escrowOfficerPhone: '(707) 433-1100',
       escrowOfficerEmail: 'brian@wineescrow.com',
-      titleCompany: 'Old Republic Title',
+
       lenderName: 'JPMorgan Chase',
       loanOfficer: 'Karen Davis',
       buyerName: 'Robert & Ellen Hayes',
       sellerName: 'Phillip Nguyen',
       purchasePrice: 475000000, // $4,750,000
       earnestMoneyDeposit: 15000000, // $150,000
-      commissionPercent: '5.0',
+      buyerCommissionPercent: '2.5',
+      listingCommissionPercent: '2.5',
+      contractDate: addDays(today, -21),
       acceptanceDate: addDays(today, -20),
-      escrowOpenDate: addDays(today, -18),
       inspectionContingencyDate: addDays(today, -5),
       appraisalContingencyDate: addDays(today, 2),
       loanContingencyDate: addDays(today, 7),
@@ -375,9 +398,10 @@ async function seed() {
       buyerName: 'Thomas & Cynthia Park',
       sellerName: 'Daniel Freeman',
       purchasePrice: 62500000, // $625,000
-      commissionPercent: '2.5',
+      buyerCommissionPercent: '2.5',
+      listingCommissionPercent: '2.5',
+      contractDate: addDays(today, -66),
       acceptanceDate: addDays(today, -65),
-      escrowOpenDate: addDays(today, -63),
       expectedCloseDate: addDays(today, -5),
       actualCloseDate: addDays(today, -5),
       createdBy: adminId,
@@ -400,7 +424,8 @@ async function seed() {
       sellerName: 'Westside Development LLC',
       purchasePrice: 82500000, // $825,000
       earnestMoneyDeposit: 1500000, // $15,000
-      commissionPercent: '2.5',
+      buyerCommissionPercent: '2.5',
+      listingCommissionPercent: '2.5',
       acceptanceDate: addDays(today, -2),
       expectedCloseDate: null,
       createdBy: adminId,
@@ -425,16 +450,17 @@ async function seed() {
       escrowCompany: 'Redwood Empire Escrow',
       escrowOfficer: 'Lisa Hammond',
       escrowOfficerPhone: '(707) 545-3300',
-      titleCompany: 'First American Title',
+
       lenderName: 'Guaranteed Rate',
       loanOfficer: 'Chris Murphy',
       buyerName: 'Kevin & Rosa Martinez',
       sellerName: 'Alan & Judy Foster',
       purchasePrice: 105000000, // $1,050,000
       earnestMoneyDeposit: 3000000, // $30,000
-      commissionPercent: '2.5',
+      buyerCommissionPercent: '2.5',
+      listingCommissionPercent: '2.5',
+      contractDate: addDays(today, -15),
       acceptanceDate: addDays(today, -14),
-      escrowOpenDate: addDays(today, -12),
       inspectionContingencyDate: addDays(today, 3),
       appraisalContingencyDate: addDays(today, 8),
       loanContingencyDate: addDays(today, 14),
@@ -453,11 +479,12 @@ async function seed() {
       sellerAgentId: agent3Id,
       sellerAgentIsInHouse: true,
       transactionType: 'listing',
-      status: 'active',
+      status: 'listed',
       propertyType: 'single_family',
       sellerName: 'Benjamin & Sarah Cole',
-      listPrice: 129500000, // $1,295,000
-      commissionPercent: '2.5',
+      purchasePrice: 129500000, // $1,295,000
+      buyerCommissionPercent: '2.5',
+      listingCommissionPercent: '2.5',
       createdBy: adminId,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -477,9 +504,10 @@ async function seed() {
       buyerName: 'Atlas Investment Group',
       sellerName: 'Horizon Properties',
       purchasePrice: 285000000, // $2,850,000
-      commissionPercent: '2.0',
+      buyerCommissionPercent: '2.0',
+      listingCommissionPercent: '2.0',
+      contractDate: addDays(today, -51),
       acceptanceDate: addDays(today, -50),
-      escrowOpenDate: addDays(today, -48),
       expectedCloseDate: addDays(today, -10),
       notes: 'Cancelled due to failed inspection and buyer financing issues.',
       createdBy: adminId,
@@ -519,12 +547,17 @@ async function seed() {
     for (const template of applicableTemplates) {
       const dueDate = calcDueDate(
         {
+          contractDate: tx.contractDate,
           acceptanceDate: tx.acceptanceDate,
-          escrowOpenDate: tx.escrowOpenDate,
+          verificationOfFundsDate: tx.verificationOfFundsDate,
+          earnestMoneyDueDate: tx.earnestMoneyDueDate,
           expectedCloseDate: tx.expectedCloseDate,
           inspectionContingencyDate: tx.inspectionContingencyDate,
-          appraisalContingencyDate: tx.appraisalContingencyDate,
+          insuranceContingencyDate: tx.insuranceContingencyDate,
           loanContingencyDate: tx.loanContingencyDate,
+          appraisalContingencyDate: tx.appraisalContingencyDate,
+          hoaDocsDueDate: tx.hoaDocsDueDate,
+          listingActiveDate: tx.listingActiveDate,
         },
         template.relativeTo,
         template.relativeDueDays,

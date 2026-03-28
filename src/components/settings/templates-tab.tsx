@@ -66,13 +66,17 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const RELATIVE_TO_LABELS: Record<string, string> = {
+  contract_date: 'Contract Date',
   acceptance_date: 'Acceptance',
-  escrow_open: 'Escrow Open',
-  expected_close_date: 'Close Date',
+  verification_of_funds_date: 'Verification of Funds',
+  earnest_money_due_date: 'Earnest Money Due',
   inspection_contingency_date: 'Inspection Contingency',
-  appraisal_contingency_date: 'Appraisal Contingency',
+  insurance_contingency_date: 'Insurance Contingency',
   loan_contingency_date: 'Loan Contingency',
+  appraisal_contingency_date: 'Appraisal Contingency',
+  hoa_docs_due_date: 'HOA Docs Due',
   listing_active_date: 'Listing Active',
+  expected_close_date: 'Close Date',
 };
 
 const TX_TYPE_LABELS: Record<string, string> = {

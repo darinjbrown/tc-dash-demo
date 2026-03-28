@@ -20,16 +20,15 @@ import type { AgentTransactionGroup } from '@/actions/transactions';
 
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pending' },
-  { value: 'active', label: 'Active' },
+  { value: 'listed', label: 'Listed' },
   { value: 'in_escrow', label: 'In Escrow' },
-  { value: 'closing', label: 'Closing' },
   { value: 'closed', label: 'Closed' },
   { value: 'cancelled', label: 'Cancelled' },
 ];
 
 export default function TransactionsPage() {
   const [groups, setGroups] = useState<AgentTransactionGroup[]>([]);
-  const [agents, setAgents] = useState<{ id: string; name: string; broker: string | null }[]>([]);
+  const [agents, setAgents] = useState<{ id: string; name: string; broker: string | null; email: string; phone: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState('');

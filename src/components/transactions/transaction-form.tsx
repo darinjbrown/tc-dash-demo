@@ -37,6 +37,8 @@ interface AgentOption {
   id: string;
   name: string;
   broker: string | null;
+  email: string;
+  phone: string | null;
 }
 
 interface TransactionFormProps {
@@ -53,18 +55,24 @@ function toFormDollars(cents: number | null | undefined): string {
 }
 
 // ─── Agent Picker Field ───────────────────────────────────────────────────────
-// Shows a checkbox "In-House" + either a Select (in-house) or a text input (outside).
+// In-house: dropdown + read-only contact info from agent profile.
+// Outside: free-text fields for name, company, phone, email.
 
 interface AgentPickerFieldProps {
   label: string;
-  /** form field names for the two data points */
   agentIdField: 'sellerAgentId' | 'buyerAgentId';
   isInHouseField: 'sellerAgentIsInHouse' | 'buyerAgentIsInHouse';
   agentTextField: 'sellerAgent' | 'buyerAgent';
+  agentCompanyField: 'sellerAgentCompany' | 'buyerAgentCompany';
+  agentPhoneField: 'sellerAgentPhone' | 'buyerAgentPhone';
+  agentEmailField: 'sellerAgentEmail' | 'buyerAgentEmail';
   agents: AgentOption[];
   defaultAgentId?: string | null;
   defaultIsInHouse?: boolean | null;
   defaultAgentText?: string | null;
+  defaultAgentCompany?: string | null;
+  defaultAgentPhone?: string | null;
+  defaultAgentEmail?: string | null;
   setValue: (field: keyof TransactionFormValues, value: string | boolean) => void;
   register: ReturnType<typeof useForm<TransactionFormValues>>['register'];
   onAddAgent: (newAgent: AgentOption) => void;
@@ -75,37 +83,50 @@ function AgentPickerField({
   agentIdField,
   isInHouseField,
   agentTextField,
+  agentCompanyField,
+  agentPhoneField,
+  agentEmailField,
   agents,
   defaultAgentId,
   defaultIsInHouse,
   defaultAgentText,
+  defaultAgentCompany,
+  defaultAgentPhone,
+  defaultAgentEmail,
   setValue,
   register,
   onAddAgent,
 }: AgentPickerFieldProps) {
   const [isInHouse, setIsInHouse] = useState<boolean>(defaultIsInHouse ?? false);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(defaultAgentId ?? null);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+
+  const selectedAgent = agents.find((a) => a.id === selectedAgentId) ?? null;
 
   function handleInHouseToggle(checked: boolean) {
     setIsInHouse(checked);
     setValue(isInHouseField, checked);
     if (!checked) {
-      // Clear the FK when switching to outside
       setValue(agentIdField, '');
+      setSelectedAgentId(null);
     } else {
-      // Clear text input when switching to in-house
       setValue(agentTextField, '');
+      setValue(agentCompanyField, '');
+      setValue(agentPhoneField, '');
+      setValue(agentEmailField, '');
     }
   }
 
   function handleAgentSelect(value: string) {
-    setValue(agentIdField, value === '__none__' ? '' : value);
+    const id = value === '__none__' ? '' : value;
+    setValue(agentIdField, id);
+    setSelectedAgentId(id || null);
   }
 
   function handleAgentCreated(newAgent: AgentOption) {
     onAddAgent(newAgent);
-    // Auto-select the newly created agent
     setValue(agentIdField, newAgent.id);
+    setSelectedAgentId(newAgent.id);
   }
 
   return (
@@ -122,42 +143,68 @@ function AgentPickerField({
       </div>
 
       {isInHouse ? (
-        <div className="flex gap-2">
-          <Select
-            onValueChange={handleAgentSelect}
-            defaultValue={defaultAgentId ?? '__none__'}
-          >
-            <SelectTrigger className="flex-1">
-              <SelectValue placeholder="Select agent..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">— None —</SelectItem>
-              {agents.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  <span>{a.name}</span>
-                  {a.broker && (
-                    <span className="ml-1 text-muted-foreground text-xs">· {a.broker}</span>
-                  )}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={() => setQuickAddOpen(true)}
-            title="Add new agent"
-          >
-            <Plus className="size-4" />
-          </Button>
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <Select onValueChange={handleAgentSelect} defaultValue={defaultAgentId ?? '__none__'}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Select agent..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">— None —</SelectItem>
+                {agents.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    <span>{a.name}</span>
+                    {a.broker && (
+                      <span className="ml-1 text-muted-foreground text-xs">· {a.broker}</span>
+                    )}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => setQuickAddOpen(true)}
+              title="Add new agent"
+            >
+              <Plus className="size-4" />
+            </Button>
+          </div>
+          {selectedAgent && (
+            <div className="text-sm text-muted-foreground space-y-0.5 border-l-2 pl-3 ml-1">
+              {selectedAgent.broker && <p>{selectedAgent.broker}</p>}
+              {selectedAgent.phone && <p>{selectedAgent.phone}</p>}
+              {selectedAgent.email && <p>{selectedAgent.email}</p>}
+            </div>
+          )}
         </div>
       ) : (
-        <Input
-          {...register(agentTextField)}
-          defaultValue={defaultAgentText ?? ''}
-          placeholder="Agent name (outside brokerage)"
-        />
+        <div className="space-y-2">
+          <Input
+            {...register(agentTextField)}
+            defaultValue={defaultAgentText ?? ''}
+            placeholder="Agent name"
+          />
+          <Input
+            {...register(agentCompanyField)}
+            defaultValue={defaultAgentCompany ?? ''}
+            placeholder="Brokerage / Company"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <PhoneInput
+              {...register(agentPhoneField)}
+              defaultValue={defaultAgentPhone ?? ''}
+              placeholder="(707) 000-0000"
+            />
+            <Input
+              type="email"
+              {...register(agentEmailField)}
+              defaultValue={defaultAgentEmail ?? ''}
+              placeholder="agent@example.com"
+            />
+          </div>
+        </div>
       )}
 
       <QuickAddAgentDialog
@@ -174,7 +221,13 @@ function AgentPickerField({
 export function TransactionForm({ agents: initialAgents, open, onOpenChange, transaction }: TransactionFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [agents, setAgents] = useState<AgentOption[]>(initialAgents);
+  // Track only agents added mid-session (quick-add). Merge with the prop so
+  // late-arriving prop updates (async fetch on list page) are always reflected.
+  const [addedAgents, setAddedAgents] = useState<AgentOption[]>([]);
+  const agents = [
+    ...initialAgents,
+    ...addedAgents.filter((a) => !initialAgents.find((b) => b.id === a.id)),
+  ];
   const isEdit = !!transaction;
 
   const {
@@ -195,8 +248,20 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
           mlsNumber: transaction.mlsNumber ?? '',
           sellerAgentId: transaction.sellerAgentId ?? '',
           sellerAgentIsInHouse: transaction.sellerAgentIsInHouse ?? false,
+          sellerAgentCompany: transaction.sellerAgentCompany ?? '',
+          sellerAgentPhone: transaction.sellerAgentPhone ?? '',
+          sellerAgentEmail: transaction.sellerAgentEmail ?? '',
           buyerAgentId: transaction.buyerAgentId ?? '',
           buyerAgentIsInHouse: transaction.buyerAgentIsInHouse ?? false,
+          buyerAgentCompany: transaction.buyerAgentCompany ?? '',
+          buyerAgentPhone: transaction.buyerAgentPhone ?? '',
+          buyerAgentEmail: transaction.buyerAgentEmail ?? '',
+          sellerTcName: transaction.sellerTcName ?? '',
+          sellerTcEmail: transaction.sellerTcEmail ?? '',
+          sellerTcPhone: transaction.sellerTcPhone ?? '',
+          buyerTcName: transaction.buyerTcName ?? '',
+          buyerTcEmail: transaction.buyerTcEmail ?? '',
+          buyerTcPhone: transaction.buyerTcPhone ?? '',
           transactionType: transaction.transactionType,
           status: transaction.status,
           propertyType: transaction.propertyType ?? undefined,
@@ -205,15 +270,19 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
           sellerName: transaction.sellerName ?? '',
           sellerAgent: transaction.sellerAgent ?? '',
           purchasePrice: toFormDollars(transaction.purchasePrice),
-          listPrice: toFormDollars(transaction.listPrice),
           earnestMoneyDeposit: toFormDollars(transaction.earnestMoneyDeposit),
-          commissionPercent: transaction.commissionPercent ?? '',
+          buyerCommissionPercent: transaction.buyerCommissionPercent ?? '',
+          listingCommissionPercent: transaction.listingCommissionPercent ?? '',
+          contractDate: transaction.contractDate ?? '',
           acceptanceDate: transaction.acceptanceDate ?? '',
-          escrowOpenDate: transaction.escrowOpenDate ?? '',
-          listingActiveDate: transaction.listingActiveDate ?? '',
+          verificationOfFundsDate: transaction.verificationOfFundsDate ?? '',
+          earnestMoneyDueDate: transaction.earnestMoneyDueDate ?? '',
           inspectionContingencyDate: transaction.inspectionContingencyDate ?? '',
-          appraisalContingencyDate: transaction.appraisalContingencyDate ?? '',
+          insuranceContingencyDate: transaction.insuranceContingencyDate ?? '',
           loanContingencyDate: transaction.loanContingencyDate ?? '',
+          appraisalContingencyDate: transaction.appraisalContingencyDate ?? '',
+          hoaDocsDueDate: transaction.hoaDocsDueDate ?? '',
+          listingActiveDate: transaction.listingActiveDate ?? '',
           expectedCloseDate: transaction.expectedCloseDate ?? '',
           actualCloseDate: transaction.actualCloseDate ?? '',
           escrowNumber: transaction.escrowNumber ?? '',
@@ -221,8 +290,7 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
           escrowOfficer: transaction.escrowOfficer ?? '',
           escrowOfficerPhone: transaction.escrowOfficerPhone ?? '',
           escrowOfficerEmail: transaction.escrowOfficerEmail ?? '',
-          titleCompany: transaction.titleCompany ?? '',
-          titleOfficer: transaction.titleOfficer ?? '',
+
           lenderName: transaction.lenderName ?? '',
           loanOfficer: transaction.loanOfficer ?? '',
           loanOfficerPhone: transaction.loanOfficerPhone ?? '',
@@ -236,9 +304,9 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
   const isListing = transactionType === 'listing' || transactionType === 'dual';
 
   function handleAgentAdded(newAgent: AgentOption) {
-    setAgents((prev) => {
+    setAddedAgents((prev) => {
       if (prev.find((a) => a.id === newAgent.id)) return prev;
-      return [...prev, newAgent].sort((a, b) => a.name.localeCompare(b.name));
+      return [...prev, newAgent];
     });
   }
 
@@ -354,9 +422,8 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="listed">Listed</SelectItem>
                     <SelectItem value="in_escrow">In Escrow</SelectItem>
-                    <SelectItem value="closing">Closing</SelectItem>
                     <SelectItem value="closed">Closed</SelectItem>
                     <SelectItem value="cancelled">Cancelled</SelectItem>
                   </SelectContent>
@@ -397,10 +464,16 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
               agentIdField="sellerAgentId"
               isInHouseField="sellerAgentIsInHouse"
               agentTextField="sellerAgent"
+              agentCompanyField="sellerAgentCompany"
+              agentPhoneField="sellerAgentPhone"
+              agentEmailField="sellerAgentEmail"
               agents={agents}
               defaultAgentId={transaction?.sellerAgentId}
               defaultIsInHouse={transaction?.sellerAgentIsInHouse ?? false}
               defaultAgentText={transaction?.sellerAgent}
+              defaultAgentCompany={transaction?.sellerAgentCompany}
+              defaultAgentPhone={transaction?.sellerAgentPhone}
+              defaultAgentEmail={transaction?.sellerAgentEmail}
               setValue={setValue}
               register={register}
               onAddAgent={handleAgentAdded}
@@ -411,14 +484,47 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
               agentIdField="buyerAgentId"
               isInHouseField="buyerAgentIsInHouse"
               agentTextField="buyerAgent"
+              agentCompanyField="buyerAgentCompany"
+              agentPhoneField="buyerAgentPhone"
+              agentEmailField="buyerAgentEmail"
               agents={agents}
               defaultAgentId={transaction?.buyerAgentId}
               defaultIsInHouse={transaction?.buyerAgentIsInHouse ?? false}
               defaultAgentText={transaction?.buyerAgent}
+              defaultAgentCompany={transaction?.buyerAgentCompany}
+              defaultAgentPhone={transaction?.buyerAgentPhone}
+              defaultAgentEmail={transaction?.buyerAgentEmail}
               setValue={setValue}
               register={register}
               onAddAgent={handleAgentAdded}
             />
+          </section>
+
+          <Separator />
+
+          {/* ── Transaction Coordinators ─────────────────── */}
+          <section className="space-y-4">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Transaction Coordinators
+            </p>
+
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground font-medium">Seller-Side TC</p>
+              <Input {...register('sellerTcName')} placeholder="Name" />
+              <div className="grid grid-cols-2 gap-2">
+                <PhoneInput {...register('sellerTcPhone')} placeholder="(707) 000-0000" />
+                <Input type="email" {...register('sellerTcEmail')} placeholder="tc@example.com" />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground font-medium">Buyer-Side TC</p>
+              <Input {...register('buyerTcName')} placeholder="Name" />
+              <div className="grid grid-cols-2 gap-2">
+                <PhoneInput {...register('buyerTcPhone')} placeholder="(707) 000-0000" />
+                <Input type="email" {...register('buyerTcEmail')} placeholder="tc@example.com" />
+              </div>
+            </div>
           </section>
 
           <Separator />
@@ -449,12 +555,40 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
             </p>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
+                <Label htmlFor="contractDate">Contract Date</Label>
+                <Input id="contractDate" type="date" {...register('contractDate')} />
+              </div>
+              <div className="space-y-1.5">
                 <Label htmlFor="acceptanceDate">Acceptance Date</Label>
                 <Input id="acceptanceDate" type="date" {...register('acceptanceDate')} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="escrowOpenDate">Escrow Open</Label>
-                <Input id="escrowOpenDate" type="date" {...register('escrowOpenDate')} />
+                <Label htmlFor="verificationOfFundsDate">Verification of Funds Due</Label>
+                <Input id="verificationOfFundsDate" type="date" {...register('verificationOfFundsDate')} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="earnestMoneyDueDate">Earnest Money Due</Label>
+                <Input id="earnestMoneyDueDate" type="date" {...register('earnestMoneyDueDate')} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="inspectionContingencyDate">Inspection Contingency</Label>
+                <Input id="inspectionContingencyDate" type="date" {...register('inspectionContingencyDate')} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="insuranceContingencyDate">Insurance Contingency</Label>
+                <Input id="insuranceContingencyDate" type="date" {...register('insuranceContingencyDate')} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="loanContingencyDate">Loan Contingency</Label>
+                <Input id="loanContingencyDate" type="date" {...register('loanContingencyDate')} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="appraisalContingencyDate">Appraisal Contingency</Label>
+                <Input id="appraisalContingencyDate" type="date" {...register('appraisalContingencyDate')} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="hoaDocsDueDate">HOA Docs Due</Label>
+                <Input id="hoaDocsDueDate" type="date" {...register('hoaDocsDueDate')} />
               </div>
               {isListing && (
                 <div className="space-y-1.5">
@@ -465,30 +599,6 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
               <div className="space-y-1.5">
                 <Label htmlFor="expectedCloseDate">Expected Close</Label>
                 <Input id="expectedCloseDate" type="date" {...register('expectedCloseDate')} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="inspectionContingencyDate">Inspection Contingency</Label>
-                <Input
-                  id="inspectionContingencyDate"
-                  type="date"
-                  {...register('inspectionContingencyDate')}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="appraisalContingencyDate">Appraisal Contingency</Label>
-                <Input
-                  id="appraisalContingencyDate"
-                  type="date"
-                  {...register('appraisalContingencyDate')}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="loanContingencyDate">Loan Contingency</Label>
-                <Input
-                  id="loanContingencyDate"
-                  type="date"
-                  {...register('loanContingencyDate')}
-                />
               </div>
             </div>
           </section>
@@ -512,16 +622,6 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="listPrice">List Price ($)</Label>
-                <Input
-                  id="listPrice"
-                  type="number"
-                  step="1000"
-                  {...register('listPrice')}
-                  placeholder="525000"
-                />
-              </div>
-              <div className="space-y-1.5">
                 <Label htmlFor="earnestMoneyDeposit">Earnest Money ($)</Label>
                 <Input
                   id="earnestMoneyDeposit"
@@ -532,10 +632,18 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="commissionPercent">Commission %</Label>
+                <Label htmlFor="buyerCommissionPercent">Buyer Commission %</Label>
                 <Input
-                  id="commissionPercent"
-                  {...register('commissionPercent')}
+                  id="buyerCommissionPercent"
+                  {...register('buyerCommissionPercent')}
+                  placeholder="2.5"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="listingCommissionPercent">Listing Commission %</Label>
+                <Input
+                  id="listingCommissionPercent"
+                  {...register('listingCommissionPercent')}
                   placeholder="2.5"
                 />
               </div>
@@ -570,14 +678,7 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
                 <Label htmlFor="escrowOfficerEmail">Escrow Email</Label>
                 <Input id="escrowOfficerEmail" type="email" {...register('escrowOfficerEmail')} />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="titleCompany">Title Company</Label>
-                <Input id="titleCompany" {...register('titleCompany')} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="titleOfficer">Title Officer</Label>
-                <Input id="titleOfficer" {...register('titleOfficer')} />
-              </div>
+
             </div>
           </section>
 
