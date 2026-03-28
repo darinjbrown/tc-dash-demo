@@ -1,6 +1,6 @@
 import { format, parseISO, isToday, isTomorrow, differenceInDays } from 'date-fns';
 import Link from 'next/link';
-import { CalendarDays, MapPin, User } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { TaskWithTransaction } from '@/actions/tasks';
@@ -56,35 +56,30 @@ export function UpcomingDeadlines({ deadlines }: UpcomingDeadlinesProps) {
                     {format(parseISO(dateKey), 'MMM d')}
                   </span>
                 </p>
-                <ul className="space-y-2">
+                <ul className="space-y-1.5">
                   {tasks.map((task) => (
-                    <li key={task.id} className="flex items-start gap-3">
-                      <div className="size-1.5 rounded-full bg-primary shrink-0 mt-1.5" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{task.name}</p>
-                        <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <MapPin className="size-3" />
-                            <Link
-                              href={`/transactions/${task.transactionId}`}
-                              className="hover:text-foreground transition-colors truncate max-w-50"
-                            >
-                              {task.address}
-                              {task.city ? `, ${task.city}` : ''}
-                            </Link>
-                          </span>
-                          {task.agentName && (
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <User className="size-3" />
-                              {task.agentName}
-                            </span>
-                          )}
-                          {task.priority === 'urgent' && (
-                            <Badge className="text-[10px] px-1.5 py-0 h-4 bg-destructive text-destructive-foreground">
-                              Urgent
-                            </Badge>
-                          )}
-                        </div>
+                    <li key={task.id} className="flex items-baseline gap-2">
+                      <div className="size-1.5 rounded-full bg-primary shrink-0 mt-1.75" />
+                      <div className="flex-1 min-w-0 flex items-baseline gap-1.5 flex-wrap">
+                        <Link
+                          href={`/transactions/${task.transactionId}`}
+                          className="text-sm text-muted-foreground shrink-0 truncate max-w-30 hover:underline"
+                        >
+                          {task.address.split(',')[0]}
+                        </Link>
+                        <span className="text-muted-foreground/40 text-sm shrink-0">·</span>
+                        <span className="text-sm font-medium truncate flex-1">{task.name}</span>
+                        {task.agentName && (
+                          <>
+                            <span className="text-muted-foreground/40 text-sm shrink-0">·</span>
+                            <span className="text-sm text-muted-foreground shrink-0">{task.agentName}</span>
+                          </>
+                        )}
+                        {task.priority === 'urgent' && (
+                          <Badge className="text-[10px] px-1.5 py-0 h-4 bg-destructive text-destructive-foreground shrink-0">
+                            Urgent
+                          </Badge>
+                        )}
                       </div>
                     </li>
                   ))}
