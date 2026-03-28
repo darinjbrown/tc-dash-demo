@@ -63,9 +63,15 @@ export default function TransactionsPage() {
         const matchesSearch =
           !q ||
           tx.address.toLowerCase().includes(q) ||
+          (tx.city ?? '').toLowerCase().includes(q) ||
           (tx.mlsNumber ?? '').toLowerCase().includes(q) ||
           (tx.buyerName ?? '').toLowerCase().includes(q) ||
-          (tx.sellerName ?? '').toLowerCase().includes(q);
+          (tx.sellerName ?? '').toLowerCase().includes(q) ||
+          (tx.sellerAgentName ?? '').toLowerCase().includes(q) ||
+          (tx.buyerAgentName ?? '').toLowerCase().includes(q) ||
+          (tx.sellerTcName ?? '').toLowerCase().includes(q) ||
+          (tx.buyerTcName ?? '').toLowerCase().includes(q) ||
+          (tx.expectedCloseDate ?? '').includes(q);
         const matchesStatus =
           selectedStatuses.length === 0 || selectedStatuses.includes(tx.status);
         return matchesSearch && matchesStatus;
