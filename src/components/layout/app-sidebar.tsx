@@ -30,6 +30,7 @@ import {
   ArrowLeftRight,
   Users,
   UserCog,
+  ListChecks,
   Settings,
   ChevronUp,
   LogOut,
@@ -40,6 +41,7 @@ const NAV_ITEMS = [
   { href: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
   { href: '/agents', label: 'Agents', icon: Users },
   { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/templates', label: 'Templates', icon: ListChecks },
 ];
 
 const ADMIN_NAV_ITEMS = [
