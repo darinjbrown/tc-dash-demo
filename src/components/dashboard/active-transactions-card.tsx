@@ -39,8 +39,6 @@ export function ActiveTransactionsCard({ transactions, collapsedHeight }: Active
     setIsOverflowing(el.scrollHeight > el.clientHeight);
   }, [transactions, collapsedHeight]);
 
-  // When collapsed: items-stretch drives the card height to match the stats grid.
-  // When expanded: self-start breaks out of stretch so the card grows to full content.
   return (
     <Card
       className="flex flex-col overflow-hidden"
@@ -63,7 +61,7 @@ export function ActiveTransactionsCard({ transactions, collapsedHeight }: Active
                 Expanded: overflow visible, natural height. */}
             <div ref={listRef} className={cn('divide-y', expanded ? '' : 'flex-1 overflow-hidden')}>
               {transactions.map((tx) => {
-                const agents = [tx.sellerAgentName, tx.buyerAgentName]
+                const agentDisplay = [tx.primaryListingAgent, tx.primaryBuyerAgent]
                   .filter(Boolean)
                   .join(' · ');
                 const closeDate = tx.expectedCloseDate
@@ -89,8 +87,8 @@ export function ActiveTransactionsCard({ transactions, collapsedHeight }: Active
                             <span className="text-sm text-muted-foreground shrink-0">{tx.city}</span>
                           )}
                         </div>
-                        {agents && (
-                          <p className="text-sm text-muted-foreground mt-0.5 truncate">{agents}</p>
+                        {agentDisplay && (
+                          <p className="text-sm text-muted-foreground mt-0.5 truncate">{agentDisplay}</p>
                         )}
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">

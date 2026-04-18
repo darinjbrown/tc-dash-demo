@@ -110,6 +110,7 @@ async function seed() {
   await db.delete(schema.transactionTasks);
   await db.delete(schema.taskTemplates);
   await db.delete(schema.taskTemplateGroups);
+  await db.delete(schema.transactionAgents);
   await db.delete(schema.transactions);
   await db.delete(schema.agents);
   await db.delete(schema.sessions);
@@ -117,18 +118,28 @@ async function seed() {
   await db.delete(schema.verificationTokens);
   await db.delete(schema.users);
 
-  // ── Admin user ─────────────────────────────────────────────────────────
-  console.log('  Seeding admin user...');
+  // ── Admin users ────────────────────────────────────────────────────────
+  console.log('  Seeding admin users...');
   const adminId = uuid();
   const hashedPassword = await bcrypt.hash('password123', 12);
-  await db.insert(schema.users).values({
-    id: adminId,
-    name: 'Admin User',
-    email: 'admin@example.com',
-    hashedPassword,
-    role: 'admin',
-    createdAt: new Date(),
-  });
+  await db.insert(schema.users).values([
+    {
+      id: adminId,
+      name: 'Admin User',
+      email: 'admin@example.com',
+      hashedPassword,
+      role: 'admin',
+      createdAt: new Date(),
+    },
+    {
+      id: uuid(),
+      name: 'Darin Brown',
+      email: 'info@d20web.com',
+      hashedPassword,
+      role: 'admin',
+      createdAt: new Date(),
+    },
+  ]);
 
   // ── Agents ─────────────────────────────────────────────────────────────
   console.log('  Seeding agents...');
@@ -145,6 +156,7 @@ async function seed() {
       broker: 'Sonoma Valley Realty',
       licenseNumber: 'CA-DRE-02012345',
       isActive: true,
+      isInHouse: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     },
@@ -156,6 +168,7 @@ async function seed() {
       broker: 'Sonoma Valley Realty',
       licenseNumber: 'CA-DRE-01987654',
       isActive: true,
+      isInHouse: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     },
@@ -167,6 +180,7 @@ async function seed() {
       broker: 'North Bay Properties',
       licenseNumber: 'CA-DRE-02156789',
       isActive: true,
+      isInHouse: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     },
@@ -250,8 +264,6 @@ async function seed() {
       state: 'CA',
       zipCode: '95448',
       mlsNumber: 'SN26001',
-      buyerAgentId: agent1Id,
-      buyerAgentIsInHouse: true,
       transactionType: 'purchase',
       status: 'in_escrow',
       propertyType: 'single_family',
@@ -288,8 +300,6 @@ async function seed() {
       state: 'CA',
       zipCode: '95403',
       mlsNumber: 'SN26002',
-      sellerAgentId: agent1Id,
-      sellerAgentIsInHouse: true,
       transactionType: 'listing',
       status: 'listed',
       propertyType: 'condo',
@@ -312,8 +322,6 @@ buyerCommissionPercent: '2.5',
       state: 'CA',
       zipCode: '95476',
       mlsNumber: 'SN26003',
-      buyerAgentId: agent1Id,
-      buyerAgentIsInHouse: true,
       transactionType: 'purchase',
       status: 'in_escrow',
       propertyType: 'single_family',
@@ -350,10 +358,6 @@ buyerCommissionPercent: '2.5',
       state: 'CA',
       zipCode: '95448',
       mlsNumber: 'SN26004',
-      sellerAgentId: agent2Id,
-      sellerAgentIsInHouse: true,
-      buyerAgentId: agent2Id,
-      buyerAgentIsInHouse: true,
       transactionType: 'dual',
       status: 'in_escrow',
       propertyType: 'single_family',
@@ -388,8 +392,6 @@ buyerCommissionPercent: '2.5',
       state: 'CA',
       zipCode: '94952',
       mlsNumber: 'SN26005',
-      buyerAgentId: agent2Id,
-      buyerAgentIsInHouse: true,
       transactionType: 'purchase',
       status: 'closed',
       propertyType: 'condo',
@@ -415,8 +417,6 @@ buyerCommissionPercent: '2.5',
       state: 'CA',
       zipCode: '95407',
       mlsNumber: 'SN26006',
-      buyerAgentId: agent2Id,
-      buyerAgentIsInHouse: true,
       transactionType: 'purchase',
       status: 'pending',
       propertyType: 'townhouse',
@@ -441,8 +441,6 @@ buyerCommissionPercent: '2.5',
       state: 'CA',
       zipCode: '94928',
       mlsNumber: 'SN26007',
-      buyerAgentId: agent3Id,
-      buyerAgentIsInHouse: true,
       transactionType: 'purchase',
       status: 'in_escrow',
       propertyType: 'single_family',
@@ -476,8 +474,6 @@ buyerCommissionPercent: '2.5',
       state: 'CA',
       zipCode: '95446',
       mlsNumber: 'SN26008',
-      sellerAgentId: agent3Id,
-      sellerAgentIsInHouse: true,
       transactionType: 'listing',
       status: 'listed',
       propertyType: 'single_family',
@@ -496,8 +492,6 @@ buyerCommissionPercent: '2.5',
       state: 'CA',
       zipCode: '95403',
       mlsNumber: 'SN26009',
-      buyerAgentId: agent3Id,
-      buyerAgentIsInHouse: true,
       transactionType: 'purchase',
       status: 'cancelled',
       propertyType: 'multi_family',
@@ -518,6 +512,38 @@ buyerCommissionPercent: '2.5',
 
   await db.insert(schema.transactions).values(transactionData);
   console.log(`    → ${transactionData.length} transactions inserted`);
+
+  // ── Transaction agents ─────────────────────────────────────────────────
+  console.log('  Seeding transaction agents...');
+
+  // Explicit agent-to-transaction assignments (index → transactionData[index])
+  const agentAssignments: { txIndex: number; agentId: string; side: 'listing' | 'buyer' }[] = [
+    { txIndex: 0, agentId: agent1Id, side: 'buyer' },   // 412 Vineyard Ln
+    { txIndex: 1, agentId: agent1Id, side: 'listing' },  // 2205 Mendocino Ave
+    { txIndex: 2, agentId: agent1Id, side: 'buyer' },   // 88 W Watmaugh Rd
+    { txIndex: 3, agentId: agent2Id, side: 'listing' }, // 4520 Chalk Hill Rd (dual)
+    { txIndex: 3, agentId: agent2Id, side: 'buyer' },   // 4520 Chalk Hill Rd (dual)
+    { txIndex: 4, agentId: agent2Id, side: 'buyer' },   // 345 D St
+    { txIndex: 5, agentId: agent2Id, side: 'buyer' },   // 1822 Sebastopol Rd
+    { txIndex: 6, agentId: agent3Id, side: 'buyer' },   // 901 E Cotati Ave
+    { txIndex: 7, agentId: agent3Id, side: 'listing' }, // 17700 Armstrong Woods Rd
+    { txIndex: 8, agentId: agent3Id, side: 'buyer' },   // 1250 Aviation Blvd
+  ];
+
+  const transactionAgentRows: schema.NewTransactionAgent[] = agentAssignments.map(
+    ({ txIndex, agentId, side }) => ({
+      id: uuid(),
+      transactionId: transactionData[txIndex].id!,
+      agentId,
+      side,
+      isPrimary: true,
+      sortOrder: 0,
+      createdAt: new Date(),
+    }),
+  );
+
+  await db.insert(schema.transactionAgents).values(transactionAgentRows);
+  console.log(`    → ${transactionAgentRows.length} transaction agent rows inserted`);
 
   // ── Stamp transaction tasks ────────────────────────────────────────────
   console.log('  Stamping transaction tasks...');
@@ -611,6 +637,7 @@ buyerCommissionPercent: '2.5',
   console.log('\n✅ Seed complete!');
   console.log('   Login: admin@example.com / password123');
   console.log(`   Transactions: ${transactionData.length}`);
+  console.log(`   Transaction agents: ${transactionAgentRows.length}`);
   console.log(`   Task templates: ${templateRows.length}`);
   console.log(`   Transaction tasks: ${allTasks.length}`);
 

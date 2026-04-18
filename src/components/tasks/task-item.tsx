@@ -8,6 +8,7 @@ import {
   MinusCircle,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   CalendarClock,
   Clock,
 } from 'lucide-react';
@@ -52,9 +53,11 @@ function dueDateLabel(dueDate: string | null): { label: string; className: strin
 
 interface TaskItemProps {
   task: TransactionTask;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }
 
-export function TaskItem({ task }: TaskItemProps) {
+export function TaskItem({ task, onMoveUp, onMoveDown }: TaskItemProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [notes, setNotes] = useState(task.notes ?? '');
   const [snoozeDate, setSnoozeDate] = useState('');
@@ -171,6 +174,32 @@ export function TaskItem({ task }: TaskItemProps) {
               )}
             </div>
           </div>
+
+          {(onMoveUp !== undefined || onMoveDown !== undefined) && (
+            <div
+              className="flex flex-col shrink-0"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="p-0.5 rounded hover:bg-muted disabled:opacity-20"
+                onClick={onMoveUp}
+                disabled={!onMoveUp}
+                title="Move up"
+              >
+                <ChevronUp className="size-3.5 text-muted-foreground" />
+              </button>
+              <button
+                type="button"
+                className="p-0.5 rounded hover:bg-muted disabled:opacity-20"
+                onClick={onMoveDown}
+                disabled={!onMoveDown}
+                title="Move down"
+              >
+                <ChevronDown className="size-3.5 text-muted-foreground" />
+              </button>
+            </div>
+          )}
 
           {isOpen ? (
             <ChevronDown className="size-4 text-muted-foreground shrink-0 mt-0.5" />

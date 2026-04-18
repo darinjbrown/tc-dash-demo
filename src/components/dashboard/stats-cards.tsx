@@ -23,7 +23,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
       cardClass: stats.tasksDueToday > 0 ? 'border-amber-400/40' : '',
     },
     {
-      title: 'Due This Week',
+      title: 'Due Next 7 Days',
       value: stats.tasksDueThisWeek,
       description: 'Tasks due in the next 7 days',
       valueClass: '',

@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
-import { Plus, Pencil, ToggleLeft, ToggleRight, Phone, Mail, Hash, Building2, Trash2 } from 'lucide-react';
+import { Plus, Pencil, ToggleLeft, ToggleRight, Phone, Mail, Hash, Building2, Trash2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -25,8 +26,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { AgentForm } from '@/components/agents/agent-form';
-import { getAgents, toggleAgentActive, deleteAgent } from '@/actions/agents';
+import { getAgents, toggleAgentActive, deleteAgent, toggleAgentInHouse } from '@/actions/agents';
 import type { AgentWithStats } from '@/actions/agents';
+
+type TypeFilter = 'all' | 'in_house' | 'outside';
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<AgentWithStats[]>([]);
@@ -34,6 +37,9 @@ export default function AgentsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AgentWithStats | null>(null);
   const [deletingAgent, setDeletingAgent] = useState<AgentWithStats | null>(null);
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [showInactive, setShowInactive] = useState(false);
   const [, startTransition] = useTransition();
 
   async function loadAgents() {
@@ -86,6 +92,34 @@ export default function AgentsPage() {
     });
   }
 
+  function handleToggleInHouse(agent: AgentWithStats) {
+    startTransition(async () => {
+      const result = await toggleAgentInHouse(agent.id);
+      if (result.success) {
+        toast.success(agent.isInHouse ? 'Marked as outside agent' : 'Marked as in-house');
+        handleFormSuccess();
+      } else {
+        toast.error(result.error ?? 'Failed to update agent');
+      }
+    });
+  }
+
+  const filteredAgents = agents.filter((agent) => {
+    if (!showInactive && !agent.isActive) return false;
+    if (typeFilter === 'in_house' && !agent.isInHouse) return false;
+    if (typeFilter === 'outside' && agent.isInHouse) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return (
+        agent.name.toLowerCase().includes(q) ||
+        agent.email.toLowerCase().includes(q) ||
+        (agent.broker ?? '').toLowerCase().includes(q) ||
+        (agent.phone ?? '').toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+
   return (
     <div className="p-4 sm:p-6 space-y-6">
       {/* Header */}
@@ -102,6 +136,40 @@ export default function AgentsPage() {
         </Button>
       </div>
 
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+          <Input
+            placeholder="Search agents..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {(['all', 'in_house', 'outside'] as TypeFilter[]).map((f) => (
+            <Button
+              key={f}
+              size="sm"
+              variant={typeFilter === f ? 'default' : 'outline'}
+              onClick={() => setTypeFilter(f)}
+              className="h-8 text-xs"
+            >
+              {f === 'all' ? 'All' : f === 'in_house' ? 'In-House' : 'Outside'}
+            </Button>
+          ))}
+          <Button
+            size="sm"
+            variant={showInactive ? 'default' : 'outline'}
+            onClick={() => setShowInactive((v) => !v)}
+            className="h-8 text-xs"
+          >
+            Show inactive
+          </Button>
+        </div>
+      </div>
+
       {/* Table */}
       <div className="rounded-lg border overflow-hidden">
         {loading ? (
@@ -110,21 +178,28 @@ export default function AgentsPage() {
               <Skeleton key={i} className="h-12 w-full" />
             ))}
           </div>
-        ) : agents.length === 0 ? (
+        ) : filteredAgents.length === 0 ? (
           <div className="py-20 text-center text-muted-foreground">
             <Building2 className="size-10 mx-auto mb-3 opacity-30" />
-            <p className="font-medium">No agents yet</p>
-            <p className="text-sm mt-1">Add your first agent to get started.</p>
-            <Button onClick={openCreate} variant="outline" className="mt-4">
-              <Plus className="size-4 mr-2" />
-              Add Agent
-            </Button>
+            {agents.length === 0 ? (
+              <>
+                <p className="font-medium">No agents yet</p>
+                <p className="text-sm mt-1">Add your first agent to get started.</p>
+                <Button onClick={openCreate} variant="outline" className="mt-4">
+                  <Plus className="size-4 mr-2" />
+                  Add Agent
+                </Button>
+              </>
+            ) : (
+              <p className="font-medium">No agents match the current filters</p>
+            )}
           </div>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
+                <TableHead className="hidden sm:table-cell">Type</TableHead>
                 <TableHead className="hidden sm:table-cell">Contact</TableHead>
                 <TableHead className="hidden md:table-cell">License #</TableHead>
                 <TableHead className="text-center">Transactions</TableHead>
@@ -133,7 +208,7 @@ export default function AgentsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {agents.map((agent) => (
+              {filteredAgents.map((agent) => (
                 <TableRow key={agent.id} className="group">
                   <TableCell>
                     <div className="font-medium">{agent.name}</div>
@@ -141,6 +216,18 @@ export default function AgentsPage() {
                       <Mail className="size-3" />
                       {agent.email}
                     </div>
+                  </TableCell>
+
+                  <TableCell className="hidden sm:table-cell">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleInHouse(agent)}
+                      title="Click to toggle in-house status"
+                    >
+                      <Badge variant={agent.isInHouse ? 'default' : 'outline'} className="text-xs cursor-pointer">
+                        {agent.isInHouse ? 'In-House' : 'Outside'}
+                      </Badge>
+                    </button>
                   </TableCell>
 
                   <TableCell className="hidden sm:table-cell">

@@ -5,7 +5,30 @@
       "Bash(do cp -r \"$f\" .)",
       "Bash(done)",
       "Bash(npm install)",
-      "Bash(npm install drizzle-orm @libsql/client @auth/core @auth/drizzle-adapter next-auth@beta react-hook-form @hookform/resolvers zod zustand date-fns uuid next-themes)"
+      "Bash(npm install drizzle-orm @libsql/client @auth/core @auth/drizzle-adapter next-auth@beta react-hook-form @hookform/resolvers zod zustand date-fns uuid next-themes)",
+      "Bash(npm run *)",
+      "Bash(npx tsx -e ' *)",
+      "Bash(npx --yes tsx -e ' *)",
+      "Bash(node_modules/.bin/tsx -e ' *)",
+      "Bash(npx tsx *)",
+      "Bash(node --experimental-strip-types -e ' *)",
+      "Read(//c/Users/Daren/.claude/plugins/cache/superpowers-marketplace/superpowers/5.0.7/skills/brainstorming/**)",
+      "Bash(C:\\\\Users\\\\Daren\\\\.claude\\\\plugins\\\\cache\\\\superpowers-marketplace\\\\superpowers\\\\5.0.7\\\\skills\\\\brainstorming\\\\scripts\\\\start-server.sh --project-dir \"c:/Users/Daren/OneDrive/Desktop/DTB/d20web/projects/tc-dashboard\")",
+      "Bash(node \"C:/Users/Daren/.claude/plugins/cache/superpowers-marketplace/superpowers/5.0.7/skills/brainstorming/scripts/server.cjs\" --project-dir \"c:/Users/Daren/OneDrive/Desktop/DTB/d20web/projects/tc-dashboard\")",
+      "Bash(node \"C:/Users/Daren/.claude/plugins/cache/superpowers-marketplace/superpowers/5.0.7/skills/brainstorming/scripts/server.cjs\" --project-dir \"C:/Users/Daren/OneDrive/Desktop/DTB/d20web/projects/tc-dashboard\" --port 52300)",
+      "Read(//c/tmp/brainstorm/content/**)",
+      "Read(//c/tmp/brainstorm/state/**)",
+      "Read(//c/Users/Daren/.claude/plugins/cache/superpowers-marketplace/superpowers/5.0.7/skills/subagent-driven-development/**)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git commit *)",
+      "Bash(npx tsc *)",
+      "Bash(git stash *)",
+      "Bash(npx drizzle-kit *)"
+    ],
+    "additionalDirectories": [
+      "c:\\tmp\\brainstorm\\content",
+      "\\tmp\\brainstorm\\content"
     ]
   }
 }

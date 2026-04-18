@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Search, SlidersHorizontal } from 'lucide-react';
+import { Plus, Search, SlidersHorizontal, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -10,13 +10,18 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuCheckboxItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
-import { AgentGroup } from '@/components/transactions/agent-group';
+import { AgentGroup, TransactionCard } from '@/components/transactions/agent-group';
 import { TransactionForm } from '@/components/transactions/transaction-form';
 import { getTransactions } from '@/actions/transactions';
-import { getAgentsForSelect } from '@/actions/agents';
 import type { AgentTransactionGroup } from '@/actions/transactions';
+
+type SortMode = 'date-asc' | 'date-desc' | 'agent';
 
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pending' },
@@ -28,17 +33,17 @@ const STATUS_OPTIONS = [
 
 export default function TransactionsPage() {
   const [groups, setGroups] = useState<AgentTransactionGroup[]>([]);
-  const [agents, setAgents] = useState<{ id: string; name: string; broker: string | null; email: string; phone: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [sortMode, setSortMode] = useState<SortMode>('date-asc');
+  const [showHidden, setShowHidden] = useState(false);
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([getTransactions(), getAgentsForSelect()]).then(([g, a]) => {
+    getTransactions().then((g) => {
       setGroups(g);
-      setAgents(a);
       setLoading(false);
     });
   }, []);
@@ -47,11 +52,14 @@ export default function TransactionsPage() {
   function handleCreateClose(open: boolean) {
     setCreateOpen(open);
     if (!open) {
-      Promise.all([getTransactions(), getAgentsForSelect()]).then(([g, a]) => {
-        setGroups(g);
-        setAgents(a);
-      });
+      getTransactions().then((g) => setGroups(g));
     }
+  }
+
+  function isHidden(tx: AgentTransactionGroup['transactions'][number]) {
+    if (tx.status === 'cancelled') return true;
+    if (tx.status === 'closed' && tx.incompleteTasks === 0) return true;
+    return false;
   }
 
   // Client-side filtering
@@ -59,6 +67,7 @@ export default function TransactionsPage() {
     .map((group) => ({
       ...group,
       transactions: group.transactions.filter((tx) => {
+        if (!showHidden && isHidden(tx)) return false;
         const q = search.toLowerCase();
         const matchesSearch =
           !q ||
@@ -67,8 +76,8 @@ export default function TransactionsPage() {
           (tx.mlsNumber ?? '').toLowerCase().includes(q) ||
           (tx.buyerName ?? '').toLowerCase().includes(q) ||
           (tx.sellerName ?? '').toLowerCase().includes(q) ||
-          (tx.sellerAgentName ?? '').toLowerCase().includes(q) ||
-          (tx.buyerAgentName ?? '').toLowerCase().includes(q) ||
+          tx.listingAgents.some((a) => a.name.toLowerCase().includes(q)) ||
+          tx.buyerAgents.some((a) => a.name.toLowerCase().includes(q)) ||
           (tx.sellerTcName ?? '').toLowerCase().includes(q) ||
           (tx.buyerTcName ?? '').toLowerCase().includes(q) ||
           (tx.expectedCloseDate ?? '').includes(q);
@@ -79,7 +88,19 @@ export default function TransactionsPage() {
     }))
     .filter((group) => group.transactions.length > 0);
 
+  const hiddenCount = groups.flatMap((g) => g.transactions).filter(isHidden).length;
+
   const totalCount = filtered.reduce((sum, g) => sum + g.transactions.length, 0);
+
+  const flatSorted = sortMode !== 'agent'
+    ? filtered
+        .flatMap((g) => g.transactions)
+        .sort((a, b) => {
+          const da = a.expectedCloseDate ?? '\uffff';
+          const db = b.expectedCloseDate ?? '\uffff';
+          return sortMode === 'date-asc' ? da.localeCompare(db) : db.localeCompare(da);
+        })
+    : null;
 
   function toggleStatus(status: string) {
     setSelectedStatuses((prev) =>
@@ -142,6 +163,37 @@ export default function TransactionsPage() {
           </DropdownMenuContent>
         </DropdownMenu>
 
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1.5">
+              {sortMode === 'date-asc' && <ArrowUp className="size-4" />}
+              {sortMode === 'date-desc' && <ArrowDown className="size-4" />}
+              {sortMode === 'agent' && <ArrowUpDown className="size-4" />}
+              Sort
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">By Close Date</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
+              <DropdownMenuRadioItem value="date-asc">Ascending (soonest first)</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="date-desc">Descending (latest first)</DropdownMenuRadioItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuRadioItem value="agent">By Agent</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {hiddenCount > 0 && (
+          <Button
+            variant={showHidden ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={() => setShowHidden((v) => !v)}
+            className="gap-1.5"
+          >
+            {showHidden ? 'Hide archived' : `Show archived (${hiddenCount})`}
+          </Button>
+        )}
+
         {selectedStatuses.length > 0 && (
           <Button
             variant="ghost"
@@ -195,6 +247,12 @@ export default function TransactionsPage() {
             </>
           )}
         </div>
+      ) : flatSorted ? (
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          {flatSorted.map((tx) => (
+            <TransactionCard key={tx.id} tx={tx} />
+          ))}
+        </div>
       ) : (
         <div className="space-y-2">
           {filtered.map((group) => (
@@ -203,7 +261,7 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      <TransactionForm agents={agents} open={createOpen} onOpenChange={handleCreateClose} />
+      <TransactionForm open={createOpen} onOpenChange={handleCreateClose} />
     </div>
   );
 }

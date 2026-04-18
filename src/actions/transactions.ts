@@ -7,9 +7,11 @@ import {
   taskTemplateGroups,
   transactionTasks,
   activityLog,
+  transactionAgents,
+  agents,
 } from '@/db/schema';
 import type { Transaction, TransactionTask } from '@/db/schema';
-import { eq, count, sql, asc, desc, inArray } from 'drizzle-orm';
+import { eq, count, sql, asc, desc, inArray, and, notInArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/lib/auth';
 import { stampTasks, recalculateTaskDueDates } from '@/lib/task-stamping';
@@ -19,6 +21,16 @@ export type { TransactionFormValues } from '@/lib/transaction-schema';
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
+export type TransactionAgentEntry = {
+  agentId: string;
+  name: string;
+  phone: string | null;
+  email: string;
+  broker: string | null;
+  isInHouse: boolean;
+  isPrimary: boolean;
+};
+
 export type TransactionSummary = {
   id: string;
   address: string;
@@ -26,16 +38,6 @@ export type TransactionSummary = {
   state: string | null;
   zipCode: string | null;
   mlsNumber: string | null;
-  sellerAgentId: string | null;
-  sellerAgentName: string | null;
-  sellerAgentPhone: string | null;
-  sellerAgentEmail: string | null;
-  sellerAgentIsInHouse: boolean | null;
-  buyerAgentId: string | null;
-  buyerAgentName: string | null;
-  buyerAgentPhone: string | null;
-  buyerAgentEmail: string | null;
-  buyerAgentIsInHouse: boolean | null;
   transactionType: string;
   status: string;
   propertyType: string | null;
@@ -50,6 +52,9 @@ export type TransactionSummary = {
   buyerTcEmail: string | null;
   totalTasks: number;
   completedTasks: number;
+  incompleteTasks: number;
+  listingAgents: TransactionAgentEntry[];
+  buyerAgents: TransactionAgentEntry[];
 };
 
 export type AgentTransactionGroup = {
@@ -67,17 +72,16 @@ export type ActivityEntry = {
 };
 
 export type TransactionDetail = Transaction & {
-  // In-house agent info (joined from agents table)
-  sellerAgentName: string | null;
-  sellerInHouseEmail: string | null;
-  sellerInHousePhone: string | null;
-  sellerInHouseBroker: string | null;
-  buyerAgentName: string | null;
-  buyerInHouseEmail: string | null;
-  buyerInHousePhone: string | null;
-  buyerInHouseBroker: string | null;
+  listingAgents: TransactionAgentEntry[];
+  buyerAgents: TransactionAgentEntry[];
   tasks: TransactionTask[];
   activity: ActivityEntry[];
+};
+
+export type FormAgentInput = {
+  agentId: string;
+  side: 'listing' | 'buyer';
+  isPrimary: boolean;
 };
 
 // Helper: empty string → null for DB insertion
@@ -103,16 +107,6 @@ export async function getTransactions(): Promise<AgentTransactionGroup[]> {
       state: transactions.state,
       zipCode: transactions.zipCode,
       mlsNumber: transactions.mlsNumber,
-      sellerAgentId: transactions.sellerAgentId,
-      sellerAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.sellerAgentId})`,
-      sellerAgentPhone: sql<string | null>`CASE WHEN ${transactions.sellerAgentIsInHouse} = 1 THEN (select phone from agents where agents.id = ${transactions.sellerAgentId}) ELSE ${transactions.sellerAgentPhone} END`,
-      sellerAgentEmail: sql<string | null>`CASE WHEN ${transactions.sellerAgentIsInHouse} = 1 THEN (select email from agents where agents.id = ${transactions.sellerAgentId}) ELSE ${transactions.sellerAgentEmail} END`,
-      sellerAgentIsInHouse: transactions.sellerAgentIsInHouse,
-      buyerAgentId: transactions.buyerAgentId,
-      buyerAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.buyerAgentId})`,
-      buyerAgentPhone: sql<string | null>`CASE WHEN ${transactions.buyerAgentIsInHouse} = 1 THEN (select phone from agents where agents.id = ${transactions.buyerAgentId}) ELSE ${transactions.buyerAgentPhone} END`,
-      buyerAgentEmail: sql<string | null>`CASE WHEN ${transactions.buyerAgentIsInHouse} = 1 THEN (select email from agents where agents.id = ${transactions.buyerAgentId}) ELSE ${transactions.buyerAgentEmail} END`,
-      buyerAgentIsInHouse: transactions.buyerAgentIsInHouse,
       transactionType: transactions.transactionType,
       status: transactions.status,
       propertyType: transactions.propertyType,
@@ -131,40 +125,92 @@ export async function getTransactions(): Promise<AgentTransactionGroup[]> {
 
   if (rows.length === 0) return [];
 
-  const taskCountRows = await db
-    .select({
-      transactionId: transactionTasks.transactionId,
-      total: count(),
-      completed: sql<number>`sum(case when ${transactionTasks.status} = 'completed' then 1 else 0 end)`,
-    })
-    .from(transactionTasks)
-    .groupBy(transactionTasks.transactionId);
+  const txIds = rows.map((r) => r.id);
+
+  const [taskCountRows, agentRows] = await Promise.all([
+    db
+      .select({
+        transactionId: transactionTasks.transactionId,
+        total: count(),
+        completed: sql<number>`sum(case when ${transactionTasks.status} = 'completed' then 1 else 0 end)`,
+        incomplete: sql<number>`sum(case when ${transactionTasks.status} in ('pending', 'in_progress', 'overdue') then 1 else 0 end)`,
+      })
+      .from(transactionTasks)
+      .groupBy(transactionTasks.transactionId),
+
+    db
+      .select({
+        transactionId: transactionAgents.transactionId,
+        agentId: transactionAgents.agentId,
+        side: transactionAgents.side,
+        isPrimary: transactionAgents.isPrimary,
+        sortOrder: transactionAgents.sortOrder,
+        name: agents.name,
+        phone: agents.phone,
+        email: agents.email,
+        broker: agents.broker,
+        isInHouse: agents.isInHouse,
+      })
+      .from(transactionAgents)
+      .innerJoin(agents, eq(transactionAgents.agentId, agents.id))
+      .where(inArray(transactionAgents.transactionId, txIds))
+      .orderBy(transactionAgents.sortOrder),
+  ]);
 
   const countMap = new Map(
-    taskCountRows.map((r) => [r.transactionId, { total: r.total, completed: r.completed ?? 0 }]),
+    taskCountRows.map((r) => [r.transactionId, { total: r.total, completed: r.completed ?? 0, incomplete: r.incomplete ?? 0 }]),
   );
 
+  const agentMap = new Map<string, { listing: TransactionAgentEntry[]; buyer: TransactionAgentEntry[] }>();
+  for (const a of agentRows) {
+    if (!agentMap.has(a.transactionId)) {
+      agentMap.set(a.transactionId, { listing: [], buyer: [] });
+    }
+    const entry: TransactionAgentEntry = {
+      agentId: a.agentId,
+      name: a.name,
+      phone: a.phone,
+      email: a.email,
+      broker: a.broker,
+      isInHouse: a.isInHouse ?? false,
+      isPrimary: a.isPrimary,
+    };
+    agentMap.get(a.transactionId)![a.side === 'listing' ? 'listing' : 'buyer'].push(entry);
+  }
+
   const summaries: TransactionSummary[] = rows.map((r) => {
-    const counts = countMap.get(r.id) ?? { total: 0, completed: 0 };
+    const counts = countMap.get(r.id) ?? { total: 0, completed: 0, incomplete: 0 };
+    const txAgents = agentMap.get(r.id) ?? { listing: [], buyer: [] };
     return {
       ...r,
       totalTasks: counts.total,
       completedTasks: Number(counts.completed),
+      incompleteTasks: Number(counts.incomplete),
+      listingAgents: txAgents.listing,
+      buyerAgents: txAgents.buyer,
     };
   });
 
+  // Group by in-house agents only
   const groupMap = new Map<string, AgentTransactionGroup>();
   const ungroupedKey = '__none__';
 
   for (const s of summaries) {
-    // Group by seller's agent first (our listing side), fall back to buyer's agent
-    const primaryId = s.sellerAgentId ?? s.buyerAgentId;
-    const primaryName = s.sellerAgentId ? s.sellerAgentName : s.buyerAgentName;
-    const key = primaryId ?? ungroupedKey;
-    if (!groupMap.has(key)) {
-      groupMap.set(key, { agentId: primaryId, agentName: primaryName, transactions: [] });
+    const inHouseAgents = [...s.listingAgents, ...s.buyerAgents].filter((a) => a.isInHouse);
+
+    if (inHouseAgents.length === 0) {
+      if (!groupMap.has(ungroupedKey)) {
+        groupMap.set(ungroupedKey, { agentId: null, agentName: null, transactions: [] });
+      }
+      groupMap.get(ungroupedKey)!.transactions.push(s);
+    } else {
+      for (const a of inHouseAgents) {
+        if (!groupMap.has(a.agentId)) {
+          groupMap.set(a.agentId, { agentId: a.agentId, agentName: a.name, transactions: [] });
+        }
+        groupMap.get(a.agentId)!.transactions.push(s);
+      }
     }
-    groupMap.get(key)!.transactions.push(s);
   }
 
   return Array.from(groupMap.values());
@@ -177,8 +223,8 @@ export type ActiveTransactionRow = {
   transactionType: string;
   status: string;
   expectedCloseDate: string | null;
-  sellerAgentName: string | null;
-  buyerAgentName: string | null;
+  primaryListingAgent: string | null;
+  primaryBuyerAgent: string | null;
   totalTasks: number;
   completedTasks: number;
 };
@@ -192,8 +238,6 @@ export async function getActiveTransactionsList(): Promise<ActiveTransactionRow[
       transactionType: transactions.transactionType,
       status: transactions.status,
       expectedCloseDate: transactions.expectedCloseDate,
-      sellerAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.sellerAgentId})`,
-      buyerAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.buyerAgentId})`,
     })
     .from(transactions)
     .where(inArray(transactions.status, ['listed', 'in_escrow']))
@@ -201,23 +245,55 @@ export async function getActiveTransactionsList(): Promise<ActiveTransactionRow[
 
   if (rows.length === 0) return [];
 
-  const taskCounts = await db
-    .select({
-      transactionId: transactionTasks.transactionId,
-      total: count(),
-      completed: sql<number>`sum(case when ${transactionTasks.status} = 'completed' then 1 else 0 end)`,
-    })
-    .from(transactionTasks)
-    .where(inArray(transactionTasks.transactionId, rows.map((r) => r.id)))
-    .groupBy(transactionTasks.transactionId);
+  const txIds = rows.map((r) => r.id);
+
+  const [taskCounts, agentRows] = await Promise.all([
+    db
+      .select({
+        transactionId: transactionTasks.transactionId,
+        total: count(),
+        completed: sql<number>`sum(case when ${transactionTasks.status} = 'completed' then 1 else 0 end)`,
+      })
+      .from(transactionTasks)
+      .where(inArray(transactionTasks.transactionId, txIds))
+      .groupBy(transactionTasks.transactionId),
+
+    db
+      .select({
+        transactionId: transactionAgents.transactionId,
+        side: transactionAgents.side,
+        isPrimary: transactionAgents.isPrimary,
+        sortOrder: transactionAgents.sortOrder,
+        name: agents.name,
+      })
+      .from(transactionAgents)
+      .innerJoin(agents, eq(transactionAgents.agentId, agents.id))
+      .where(inArray(transactionAgents.transactionId, txIds))
+      .orderBy(transactionAgents.isPrimary, transactionAgents.sortOrder),
+  ]);
 
   const countMap = new Map(
     taskCounts.map((r) => [r.transactionId, { total: r.total, completed: Number(r.completed ?? 0) }]),
   );
 
+  const agentMap = new Map<string, { listing: string | null; buyer: string | null }>();
+  for (const a of agentRows) {
+    if (!agentMap.has(a.transactionId)) agentMap.set(a.transactionId, { listing: null, buyer: null });
+    const entry = agentMap.get(a.transactionId)!;
+    if (a.side === 'listing' && (entry.listing === null || a.isPrimary)) entry.listing = a.name;
+    if (a.side === 'buyer' && (entry.buyer === null || a.isPrimary)) entry.buyer = a.name;
+  }
+
   return rows.map((r) => {
     const counts = countMap.get(r.id) ?? { total: 0, completed: 0 };
-    return { ...r, totalTasks: counts.total, completedTasks: counts.completed };
+    const agts = agentMap.get(r.id) ?? { listing: null, buyer: null };
+    return {
+      ...r,
+      totalTasks: counts.total,
+      completedTasks: counts.completed,
+      primaryListingAgent: agts.listing,
+      primaryBuyerAgent: agts.buyer,
+    };
   });
 }
 
@@ -230,17 +306,6 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
       state: transactions.state,
       zipCode: transactions.zipCode,
       mlsNumber: transactions.mlsNumber,
-      agentId: transactions.agentId,
-      sellerAgentId: transactions.sellerAgentId,
-      sellerAgentIsInHouse: transactions.sellerAgentIsInHouse,
-      sellerAgentCompany: transactions.sellerAgentCompany,
-      sellerAgentPhone: transactions.sellerAgentPhone,
-      sellerAgentEmail: transactions.sellerAgentEmail,
-      buyerAgentId: transactions.buyerAgentId,
-      buyerAgentIsInHouse: transactions.buyerAgentIsInHouse,
-      buyerAgentCompany: transactions.buyerAgentCompany,
-      buyerAgentPhone: transactions.buyerAgentPhone,
-      buyerAgentEmail: transactions.buyerAgentEmail,
       sellerTcName: transactions.sellerTcName,
       sellerTcEmail: transactions.sellerTcEmail,
       sellerTcPhone: transactions.sellerTcPhone,
@@ -261,9 +326,7 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
       loanOfficerPhone: transactions.loanOfficerPhone,
       loanOfficerEmail: transactions.loanOfficerEmail,
       buyerName: transactions.buyerName,
-      buyerAgent: transactions.buyerAgent,
       sellerName: transactions.sellerName,
-      sellerAgent: transactions.sellerAgent,
       purchasePrice: transactions.purchasePrice,
       earnestMoneyDeposit: transactions.earnestMoneyDeposit,
       buyerCommissionPercent: transactions.buyerCommissionPercent,
@@ -284,21 +347,13 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
       createdBy: transactions.createdBy,
       createdAt: transactions.createdAt,
       updatedAt: transactions.updatedAt,
-      sellerAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.sellerAgentId})`,
-      sellerInHouseEmail: sql<string | null>`(select email from agents where agents.id = ${transactions.sellerAgentId})`,
-      sellerInHousePhone: sql<string | null>`(select phone from agents where agents.id = ${transactions.sellerAgentId})`,
-      sellerInHouseBroker: sql<string | null>`(select broker from agents where agents.id = ${transactions.sellerAgentId})`,
-      buyerAgentName: sql<string | null>`(select name from agents where agents.id = ${transactions.buyerAgentId})`,
-      buyerInHouseEmail: sql<string | null>`(select email from agents where agents.id = ${transactions.buyerAgentId})`,
-      buyerInHousePhone: sql<string | null>`(select phone from agents where agents.id = ${transactions.buyerAgentId})`,
-      buyerInHouseBroker: sql<string | null>`(select broker from agents where agents.id = ${transactions.buyerAgentId})`,
     })
     .from(transactions)
     .where(eq(transactions.id, id));
 
   if (!txRow) return null;
 
-  const [tasks, activityRows] = await Promise.all([
+  const [tasks, activityRows, agentRows] = await Promise.all([
     db
       .select()
       .from(transactionTasks)
@@ -317,18 +372,53 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
       .where(eq(activityLog.transactionId, id))
       .orderBy(desc(activityLog.createdAt))
       .limit(50),
+
+    db
+      .select({
+        agentId: transactionAgents.agentId,
+        side: transactionAgents.side,
+        isPrimary: transactionAgents.isPrimary,
+        sortOrder: transactionAgents.sortOrder,
+        name: agents.name,
+        phone: agents.phone,
+        email: agents.email,
+        broker: agents.broker,
+        isInHouse: agents.isInHouse,
+      })
+      .from(transactionAgents)
+      .innerJoin(agents, eq(transactionAgents.agentId, agents.id))
+      .where(eq(transactionAgents.transactionId, id))
+      .orderBy(transactionAgents.sortOrder),
   ]);
+
+  const listingAgents: TransactionAgentEntry[] = agentRows
+    .filter((r) => r.side === 'listing')
+    .map((r) => ({
+      agentId: r.agentId,
+      name: r.name,
+      phone: r.phone,
+      email: r.email,
+      broker: r.broker,
+      isInHouse: r.isInHouse ?? false,
+      isPrimary: r.isPrimary,
+    }));
+
+  const buyerAgents: TransactionAgentEntry[] = agentRows
+    .filter((r) => r.side === 'buyer')
+    .map((r) => ({
+      agentId: r.agentId,
+      name: r.name,
+      phone: r.phone,
+      email: r.email,
+      broker: r.broker,
+      isInHouse: r.isInHouse ?? false,
+      isPrimary: r.isPrimary,
+    }));
 
   return {
     ...txRow,
-    sellerAgentName: txRow.sellerAgentName ?? null,
-    sellerInHouseEmail: txRow.sellerInHouseEmail ?? null,
-    sellerInHousePhone: txRow.sellerInHousePhone ?? null,
-    sellerInHouseBroker: txRow.sellerInHouseBroker ?? null,
-    buyerAgentName: txRow.buyerAgentName ?? null,
-    buyerInHouseEmail: txRow.buyerInHouseEmail ?? null,
-    buyerInHousePhone: txRow.buyerInHousePhone ?? null,
-    buyerInHouseBroker: txRow.buyerInHouseBroker ?? null,
+    listingAgents,
+    buyerAgents,
     tasks,
     activity: activityRows,
   };
@@ -338,6 +428,8 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
 
 export async function createTransaction(
   data: TransactionFormValues,
+  agentInputs: FormAgentInput[] = [],
+  templateGroupIds?: string[],
 ): Promise<{ success: boolean; data?: { id: string }; error?: string }> {
   const parsed = transactionSchema.safeParse(data);
   if (!parsed.success) {
@@ -357,16 +449,6 @@ export async function createTransaction(
       state: n(values.state) ?? 'CA',
       zipCode: n(values.zipCode),
       mlsNumber: n(values.mlsNumber),
-      sellerAgentId: n(values.sellerAgentId),
-      sellerAgentIsInHouse: values.sellerAgentIsInHouse ?? false,
-      sellerAgentCompany: n(values.sellerAgentCompany),
-      sellerAgentPhone: n(values.sellerAgentPhone),
-      sellerAgentEmail: n(values.sellerAgentEmail),
-      buyerAgentId: n(values.buyerAgentId),
-      buyerAgentIsInHouse: values.buyerAgentIsInHouse ?? false,
-      buyerAgentCompany: n(values.buyerAgentCompany),
-      buyerAgentPhone: n(values.buyerAgentPhone),
-      buyerAgentEmail: n(values.buyerAgentEmail),
       sellerTcName: n(values.sellerTcName),
       sellerTcEmail: n(values.sellerTcEmail),
       sellerTcPhone: n(values.sellerTcPhone),
@@ -387,9 +469,7 @@ export async function createTransaction(
       loanOfficerPhone: n(values.loanOfficerPhone),
       loanOfficerEmail: n(values.loanOfficerEmail),
       buyerName: n(values.buyerName),
-      buyerAgent: n(values.buyerAgent),
       sellerName: n(values.sellerName),
-      sellerAgent: n(values.sellerAgent),
       purchasePrice: dollars(values.purchasePrice),
       earnestMoneyDeposit: dollars(values.earnestMoneyDeposit),
       buyerCommissionPercent: n(values.buyerCommissionPercent),
@@ -412,11 +492,28 @@ export async function createTransaction(
 
     await db.insert(transactions).values(newTx);
 
-    // Stamp tasks from active templates
-    const [templates, groups] = await Promise.all([
+    if (agentInputs.length > 0) {
+      await db.insert(transactionAgents).values(
+        agentInputs.map((a) => ({
+          id: crypto.randomUUID(),
+          transactionId: id,
+          agentId: a.agentId,
+          side: a.side,
+          isPrimary: a.isPrimary,
+          sortOrder: 0,
+        })),
+      );
+    }
+
+    // Stamp tasks from active templates, scoped to selected groups when provided
+    const [templates, allGroups] = await Promise.all([
       db.select().from(taskTemplates).where(eq(taskTemplates.isActive, true)).orderBy(asc(taskTemplates.sortOrder)),
       db.select().from(taskTemplateGroups),
     ]);
+
+    const groups = templateGroupIds?.length
+      ? allGroups.filter((g) => templateGroupIds.includes(g.id))
+      : allGroups;
 
     const stamped = stampTasks(newTx as Parameters<typeof stampTasks>[0], templates, groups);
     if (stamped.length > 0) {
@@ -465,16 +562,6 @@ export async function updateTransaction(
         state: n(values.state) ?? 'CA',
         zipCode: n(values.zipCode),
         mlsNumber: n(values.mlsNumber),
-        sellerAgentId: n(values.sellerAgentId),
-        sellerAgentIsInHouse: values.sellerAgentIsInHouse ?? false,
-        sellerAgentCompany: n(values.sellerAgentCompany),
-        sellerAgentPhone: n(values.sellerAgentPhone),
-        sellerAgentEmail: n(values.sellerAgentEmail),
-        buyerAgentId: n(values.buyerAgentId),
-        buyerAgentIsInHouse: values.buyerAgentIsInHouse ?? false,
-        buyerAgentCompany: n(values.buyerAgentCompany),
-        buyerAgentPhone: n(values.buyerAgentPhone),
-        buyerAgentEmail: n(values.buyerAgentEmail),
         sellerTcName: n(values.sellerTcName),
         sellerTcEmail: n(values.sellerTcEmail),
         sellerTcPhone: n(values.sellerTcPhone),
@@ -495,9 +582,7 @@ export async function updateTransaction(
         loanOfficerPhone: n(values.loanOfficerPhone),
         loanOfficerEmail: n(values.loanOfficerEmail),
         buyerName: n(values.buyerName),
-        buyerAgent: n(values.buyerAgent),
         sellerName: n(values.sellerName),
-        sellerAgent: n(values.sellerAgent),
         purchasePrice: dollars(values.purchasePrice),
         earnestMoneyDeposit: dollars(values.earnestMoneyDeposit),
         buyerCommissionPercent: n(values.buyerCommissionPercent),

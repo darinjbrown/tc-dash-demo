@@ -26,6 +26,7 @@ const agentFormSchema = z.object({
   broker: z.string().optional(),
   licenseNumber: z.string().optional(),
   brokerageId: z.string().optional(),
+  isInHouse: z.boolean().optional(),
 });
 
 type AgentFormValues = z.infer<typeof agentFormSchema>;
@@ -56,6 +57,7 @@ export function AgentForm({ agent, open, onOpenChange, onSuccess }: AgentFormPro
           broker: agent.broker ?? '',
           licenseNumber: agent.licenseNumber ?? '',
           brokerageId: agent.brokerageId ?? '',
+          isInHouse: agent.isInHouse ?? false,
         }
       : undefined,
   });
@@ -128,6 +130,18 @@ export function AgentForm({ agent, open, onOpenChange, onSuccess }: AgentFormPro
               {...register('broker')}
               placeholder="e.g. Sonoma Valley Realty"
             />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="isInHouse"
+              {...register('isInHouse')}
+              className="size-4 accent-primary"
+            />
+            <Label htmlFor="isInHouse" className="text-sm font-normal cursor-pointer">
+              In-House Agent (Bertolone Realty)
+            </Label>
           </div>
 
           <div className="space-y-1.5">

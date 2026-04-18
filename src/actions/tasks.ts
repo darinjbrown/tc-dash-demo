@@ -1,7 +1,14 @@
 'use server';
 
 import { db } from '@/db/client';
-import { transactionTasks, transactions, taskTemplates, taskTemplateGroups } from '@/db/schema';
+import {
+  transactionTasks,
+  transactions,
+  transactionAgents,
+  agents,
+  taskTemplates,
+  taskTemplateGroups,
+} from '@/db/schema';
 import type { TaskTemplate, TaskTemplateGroup } from '@/db/schema';
 import { templateGroupSchema } from '@/lib/template-group-schema';
 import type { TemplateGroupFormValues } from '@/lib/template-group-schema';
@@ -67,38 +74,46 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     db
       .select({ count: count() })
       .from(transactionTasks)
+      .innerJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
       .where(
         and(
           eq(transactionTasks.dueDate, today),
           notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
+          notInArray(transactions.status, ['closed', 'cancelled']),
         ),
       ),
 
     db
       .select({ count: count() })
       .from(transactionTasks)
+      .innerJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
       .where(
         and(
           isNotNull(transactionTasks.dueDate),
           gte(transactionTasks.dueDate, today),
           lte(transactionTasks.dueDate, weekEnd),
           notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
+          notInArray(transactions.status, ['closed', 'cancelled']),
         ),
       ),
 
     db
       .select({ count: count() })
       .from(transactionTasks)
+      .innerJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
       .where(
-        or(
-          and(
-            isNotNull(transactionTasks.dueDate),
-            lt(transactionTasks.dueDate, today),
-            inArray(transactionTasks.status, ['pending', 'in_progress', 'overdue']),
-          ),
-          and(
-            eq(transactionTasks.priority, 'urgent'),
-            notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
+        and(
+          notInArray(transactions.status, ['closed', 'cancelled']),
+          or(
+            and(
+              isNotNull(transactionTasks.dueDate),
+              lt(transactionTasks.dueDate, today),
+              inArray(transactionTasks.status, ['pending', 'in_progress', 'overdue']),
+            ),
+            and(
+              eq(transactionTasks.priority, 'urgent'),
+              notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
+            ),
           ),
         ),
       ),
@@ -140,19 +155,23 @@ export async function getUpcomingTasks(days = 7): Promise<TaskWithTransaction[]>
       transactionId: transactionTasks.transactionId,
       address: transactions.address,
       city: transactions.city,
-      agentName: sql<string | null>`coalesce(
-        (select name from agents where agents.id = ${transactions.sellerAgentId}),
-        (select name from agents where agents.id = ${transactions.buyerAgentId})
+      agentName: sql<string | null>`(
+        select ${agents.name} from ${transactionAgents}
+        join ${agents} on ${agents.id} = ${transactionAgents.agentId}
+        where ${transactionAgents.transactionId} = ${transactions.id}
+        order by ${transactionAgents.isPrimary} desc, ${transactionAgents.sortOrder}
+        limit 1
       )`,
     })
     .from(transactionTasks)
-    .leftJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
+    .innerJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
     .where(
       and(
         isNotNull(transactionTasks.dueDate),
         gte(transactionTasks.dueDate, today),
         lte(transactionTasks.dueDate, end),
         notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
+        notInArray(transactions.status, ['closed', 'cancelled']),
       ),
     )
     .orderBy(asc(transactionTasks.dueDate));
@@ -175,23 +194,29 @@ export async function getOverdueTasks(): Promise<TaskWithTransaction[]> {
       transactionId: transactionTasks.transactionId,
       address: transactions.address,
       city: transactions.city,
-      agentName: sql<string | null>`coalesce(
-        (select name from agents where agents.id = ${transactions.sellerAgentId}),
-        (select name from agents where agents.id = ${transactions.buyerAgentId})
+      agentName: sql<string | null>`(
+        select ${agents.name} from ${transactionAgents}
+        join ${agents} on ${agents.id} = ${transactionAgents.agentId}
+        where ${transactionAgents.transactionId} = ${transactions.id}
+        order by ${transactionAgents.isPrimary} desc, ${transactionAgents.sortOrder}
+        limit 1
       )`,
     })
     .from(transactionTasks)
-    .leftJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
+    .innerJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
     .where(
-      or(
-        and(
-          isNotNull(transactionTasks.dueDate),
-          lt(transactionTasks.dueDate, today),
-          inArray(transactionTasks.status, ['pending', 'in_progress', 'overdue']),
-        ),
-        and(
-          eq(transactionTasks.priority, 'urgent'),
-          notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
+      and(
+        notInArray(transactions.status, ['closed', 'cancelled']),
+        or(
+          and(
+            isNotNull(transactionTasks.dueDate),
+            lt(transactionTasks.dueDate, today),
+            inArray(transactionTasks.status, ['pending', 'in_progress', 'overdue']),
+          ),
+          and(
+            eq(transactionTasks.priority, 'urgent'),
+            notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
+          ),
         ),
       ),
     )
@@ -215,18 +240,22 @@ export async function getUpcomingDeadlines(limit = 10): Promise<TaskWithTransact
       transactionId: transactionTasks.transactionId,
       address: transactions.address,
       city: transactions.city,
-      agentName: sql<string | null>`coalesce(
-        (select name from agents where agents.id = ${transactions.sellerAgentId}),
-        (select name from agents where agents.id = ${transactions.buyerAgentId})
+      agentName: sql<string | null>`(
+        select ${agents.name} from ${transactionAgents}
+        join ${agents} on ${agents.id} = ${transactionAgents.agentId}
+        where ${transactionAgents.transactionId} = ${transactions.id}
+        order by ${transactionAgents.isPrimary} desc, ${transactionAgents.sortOrder}
+        limit 1
       )`,
     })
     .from(transactionTasks)
-    .leftJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
+    .innerJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
     .where(
       and(
         isNotNull(transactionTasks.dueDate),
         gte(transactionTasks.dueDate, today),
         notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
+        notInArray(transactions.status, ['closed', 'cancelled']),
       ),
     )
     .orderBy(asc(transactionTasks.dueDate))
@@ -376,6 +405,32 @@ export async function getTaskTemplateGroups(): Promise<TaskTemplateGroup[]> {
     .select()
     .from(taskTemplateGroups)
     .orderBy(asc(taskTemplateGroups.sortOrder), asc(taskTemplateGroups.createdAt));
+}
+
+export type TemplateGroupOption = {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  transactionType: string;
+};
+
+export async function getTemplateGroupsForSelect(
+  transactionType: string,
+): Promise<TemplateGroupOption[]> {
+  const all = await db
+    .select({
+      id: taskTemplateGroups.id,
+      name: taskTemplateGroups.name,
+      isDefault: taskTemplateGroups.isDefault,
+      transactionType: taskTemplateGroups.transactionType,
+    })
+    .from(taskTemplateGroups)
+    .where(eq(taskTemplateGroups.isActive, true))
+    .orderBy(asc(taskTemplateGroups.sortOrder));
+
+  return all.filter(
+    (g) => g.transactionType === transactionType || g.transactionType === 'all',
+  );
 }
 
 export async function createTaskTemplateGroup(
@@ -658,11 +713,49 @@ export async function deleteTaskTemplate(
       .where(eq(taskTemplates.id, id));
     if (!template) return { success: false, error: 'Task not found' };
 
+    // Detach any stamped transaction tasks before deleting the template
+    // so existing transaction tasks survive as standalone (custom) tasks.
+    await db
+      .update(transactionTasks)
+      .set({ templateId: null })
+      .where(eq(transactionTasks.templateId, id));
+
     await db.delete(taskTemplates).where(eq(taskTemplates.id, id));
     revalidatePath('/templates');
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Failed to delete task' };
+  }
+}
+
+export async function reorderTaskTemplates(
+  orderedIds: string[],
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await Promise.all(
+      orderedIds.map((id, i) =>
+        db.update(taskTemplates).set({ sortOrder: i * 10 }).where(eq(taskTemplates.id, id)),
+      ),
+    );
+    revalidatePath('/templates');
+    return { success: true };
+  } catch {
+    return { success: false, error: 'Failed to reorder tasks' };
+  }
+}
+
+export async function reorderTransactionTasks(
+  orderedIds: string[],
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await Promise.all(
+      orderedIds.map((id, i) =>
+        db.update(transactionTasks).set({ sortOrder: i * 10 }).where(eq(transactionTasks.id, id)),
+      ),
+    );
+    return { success: true };
+  } catch {
+    return { success: false, error: 'Failed to reorder tasks' };
   }
 }
 
