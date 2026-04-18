@@ -70,7 +70,7 @@ export const agents = sqliteTable('agents', {
   licenseNumber: text('license_number'),
   brokerageId: text('brokerage_id'),
   isActive: integer('is_active', { mode: 'boolean' }).default(true).notNull(),
-  isInHouse: integer('is_in_house', { mode: 'boolean' }).default(false).notNull(),
+  isInHouse: integer('is_in_house', { mode: 'boolean' }).default(false),
   createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .$defaultFn(() => new Date()),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
