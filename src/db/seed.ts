@@ -110,6 +110,7 @@ async function seed() {
   await db.delete(schema.transactionTasks);
   await db.delete(schema.taskTemplates);
   await db.delete(schema.taskTemplateGroups);
+  await db.delete(schema.transactionAgents);
   await db.delete(schema.transactions);
   await db.delete(schema.agents);
   await db.delete(schema.sessions);
@@ -155,6 +156,7 @@ async function seed() {
       broker: 'Sonoma Valley Realty',
       licenseNumber: 'CA-DRE-02012345',
       isActive: true,
+      isInHouse: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     },
@@ -166,6 +168,7 @@ async function seed() {
       broker: 'Sonoma Valley Realty',
       licenseNumber: 'CA-DRE-01987654',
       isActive: true,
+      isInHouse: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     },
@@ -177,6 +180,7 @@ async function seed() {
       broker: 'North Bay Properties',
       licenseNumber: 'CA-DRE-02156789',
       isActive: true,
+      isInHouse: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     },
@@ -529,6 +533,40 @@ buyerCommissionPercent: '2.5',
   await db.insert(schema.transactions).values(transactionData);
   console.log(`    → ${transactionData.length} transactions inserted`);
 
+  // ── Transaction agents ─────────────────────────────────────────────────
+  console.log('  Seeding transaction agents...');
+  const transactionAgentRows: schema.NewTransactionAgent[] = [];
+
+  for (const tx of transactionData) {
+    if (tx.sellerAgentId) {
+      transactionAgentRows.push({
+        id: uuid(),
+        transactionId: tx.id!,
+        agentId: tx.sellerAgentId,
+        side: 'listing',
+        isPrimary: true,
+        sortOrder: 0,
+        createdAt: new Date(),
+      });
+    }
+    if (tx.buyerAgentId) {
+      transactionAgentRows.push({
+        id: uuid(),
+        transactionId: tx.id!,
+        agentId: tx.buyerAgentId,
+        side: 'buyer',
+        isPrimary: true,
+        sortOrder: 0,
+        createdAt: new Date(),
+      });
+    }
+  }
+
+  if (transactionAgentRows.length > 0) {
+    await db.insert(schema.transactionAgents).values(transactionAgentRows);
+  }
+  console.log(`    → ${transactionAgentRows.length} transaction agent rows inserted`);
+
   // ── Stamp transaction tasks ────────────────────────────────────────────
   console.log('  Stamping transaction tasks...');
 
@@ -621,6 +659,7 @@ buyerCommissionPercent: '2.5',
   console.log('\n✅ Seed complete!');
   console.log('   Login: admin@example.com / password123');
   console.log(`   Transactions: ${transactionData.length}`);
+  console.log(`   Transaction agents: ${transactionAgentRows.length}`);
   console.log(`   Task templates: ${templateRows.length}`);
   console.log(`   Transaction tasks: ${allTasks.length}`);
 
