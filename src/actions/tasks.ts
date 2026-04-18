@@ -67,38 +67,46 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     db
       .select({ count: count() })
       .from(transactionTasks)
+      .innerJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
       .where(
         and(
           eq(transactionTasks.dueDate, today),
           notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
+          notInArray(transactions.status, ['closed', 'cancelled']),
         ),
       ),
 
     db
       .select({ count: count() })
       .from(transactionTasks)
+      .innerJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
       .where(
         and(
           isNotNull(transactionTasks.dueDate),
           gte(transactionTasks.dueDate, today),
           lte(transactionTasks.dueDate, weekEnd),
           notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
+          notInArray(transactions.status, ['closed', 'cancelled']),
         ),
       ),
 
     db
       .select({ count: count() })
       .from(transactionTasks)
+      .innerJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
       .where(
-        or(
-          and(
-            isNotNull(transactionTasks.dueDate),
-            lt(transactionTasks.dueDate, today),
-            inArray(transactionTasks.status, ['pending', 'in_progress', 'overdue']),
-          ),
-          and(
-            eq(transactionTasks.priority, 'urgent'),
-            notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
+        and(
+          notInArray(transactions.status, ['closed', 'cancelled']),
+          or(
+            and(
+              isNotNull(transactionTasks.dueDate),
+              lt(transactionTasks.dueDate, today),
+              inArray(transactionTasks.status, ['pending', 'in_progress', 'overdue']),
+            ),
+            and(
+              eq(transactionTasks.priority, 'urgent'),
+              notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
+            ),
           ),
         ),
       ),
@@ -146,13 +154,14 @@ export async function getUpcomingTasks(days = 7): Promise<TaskWithTransaction[]>
       )`,
     })
     .from(transactionTasks)
-    .leftJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
+    .innerJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
     .where(
       and(
         isNotNull(transactionTasks.dueDate),
         gte(transactionTasks.dueDate, today),
         lte(transactionTasks.dueDate, end),
         notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
+        notInArray(transactions.status, ['closed', 'cancelled']),
       ),
     )
     .orderBy(asc(transactionTasks.dueDate));
@@ -181,17 +190,20 @@ export async function getOverdueTasks(): Promise<TaskWithTransaction[]> {
       )`,
     })
     .from(transactionTasks)
-    .leftJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
+    .innerJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
     .where(
-      or(
-        and(
-          isNotNull(transactionTasks.dueDate),
-          lt(transactionTasks.dueDate, today),
-          inArray(transactionTasks.status, ['pending', 'in_progress', 'overdue']),
-        ),
-        and(
-          eq(transactionTasks.priority, 'urgent'),
-          notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
+      and(
+        notInArray(transactions.status, ['closed', 'cancelled']),
+        or(
+          and(
+            isNotNull(transactionTasks.dueDate),
+            lt(transactionTasks.dueDate, today),
+            inArray(transactionTasks.status, ['pending', 'in_progress', 'overdue']),
+          ),
+          and(
+            eq(transactionTasks.priority, 'urgent'),
+            notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
+          ),
         ),
       ),
     )
@@ -221,12 +233,13 @@ export async function getUpcomingDeadlines(limit = 10): Promise<TaskWithTransact
       )`,
     })
     .from(transactionTasks)
-    .leftJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
+    .innerJoin(transactions, eq(transactionTasks.transactionId, transactions.id))
     .where(
       and(
         isNotNull(transactionTasks.dueDate),
         gte(transactionTasks.dueDate, today),
         notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
+        notInArray(transactions.status, ['closed', 'cancelled']),
       ),
     )
     .orderBy(asc(transactionTasks.dueDate))

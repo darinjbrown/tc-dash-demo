@@ -251,7 +251,7 @@ export const transactionTasks = sqliteTable('transaction_tasks', {
 export const activityLog = sqliteTable('activity_log', {
   id: text('id').primaryKey(),
   transactionId: text('transaction_id').references(() => transactions.id),
-  userId: text('user_id').references(() => users.id),
+  userId: text('user_id'),
   action: text('action').notNull(), // 'created' | 'updated' | 'status_changed' | 'task_completed' | 'note_added'
   details: text('details'), // JSON string with change details
   createdAt: integer('created_at', { mode: 'timestamp_ms' })

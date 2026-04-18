@@ -5,7 +5,13 @@
       "Bash(do cp -r \"$f\" .)",
       "Bash(done)",
       "Bash(npm install)",
-      "Bash(npm install drizzle-orm @libsql/client @auth/core @auth/drizzle-adapter next-auth@beta react-hook-form @hookform/resolvers zod zustand date-fns uuid next-themes)"
+      "Bash(npm install drizzle-orm @libsql/client @auth/core @auth/drizzle-adapter next-auth@beta react-hook-form @hookform/resolvers zod zustand date-fns uuid next-themes)",
+      "Bash(npm run *)",
+      "Bash(npx tsx -e ' *)",
+      "Bash(npx --yes tsx -e ' *)",
+      "Bash(node_modules/.bin/tsx -e ' *)",
+      "Bash(npx tsx *)",
+      "Bash(node --experimental-strip-types -e ' *)"
     ]
   }
 }

@@ -117,18 +117,28 @@ async function seed() {
   await db.delete(schema.verificationTokens);
   await db.delete(schema.users);
 
-  // ── Admin user ─────────────────────────────────────────────────────────
-  console.log('  Seeding admin user...');
+  // ── Admin users ────────────────────────────────────────────────────────
+  console.log('  Seeding admin users...');
   const adminId = uuid();
   const hashedPassword = await bcrypt.hash('password123', 12);
-  await db.insert(schema.users).values({
-    id: adminId,
-    name: 'Admin User',
-    email: 'admin@example.com',
-    hashedPassword,
-    role: 'admin',
-    createdAt: new Date(),
-  });
+  await db.insert(schema.users).values([
+    {
+      id: adminId,
+      name: 'Admin User',
+      email: 'admin@example.com',
+      hashedPassword,
+      role: 'admin',
+      createdAt: new Date(),
+    },
+    {
+      id: uuid(),
+      name: 'Darin Brown',
+      email: 'info@d20web.com',
+      hashedPassword,
+      role: 'admin',
+      createdAt: new Date(),
+    },
+  ]);
 
   // ── Agents ─────────────────────────────────────────────────────────────
   console.log('  Seeding agents...');
