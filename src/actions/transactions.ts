@@ -426,6 +426,7 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
 export async function createTransaction(
   data: TransactionFormValues,
   agentInputs: FormAgentInput[] = [],
+  templateGroupIds?: string[],
 ): Promise<{ success: boolean; data?: { id: string }; error?: string }> {
   const parsed = transactionSchema.safeParse(data);
   if (!parsed.success) {
@@ -501,11 +502,15 @@ export async function createTransaction(
       );
     }
 
-    // Stamp tasks from active templates
-    const [templates, groups] = await Promise.all([
+    // Stamp tasks from active templates, scoped to selected groups when provided
+    const [templates, allGroups] = await Promise.all([
       db.select().from(taskTemplates).where(eq(taskTemplates.isActive, true)).orderBy(asc(taskTemplates.sortOrder)),
       db.select().from(taskTemplateGroups),
     ]);
+
+    const groups = templateGroupIds?.length
+      ? allGroups.filter((g) => templateGroupIds.includes(g.id))
+      : allGroups;
 
     const stamped = stampTasks(newTx as Parameters<typeof stampTasks>[0], templates, groups);
     if (stamped.length > 0) {

@@ -32,6 +32,8 @@ import type { TransactionFormValues } from '@/lib/transaction-schema';
 import { createTransaction, updateTransaction } from '@/actions/transactions';
 import type { TransactionDetail as TxDetail, FormAgentInput } from '@/actions/transactions';
 import { getAgentsForSelect } from '@/actions/agents';
+import { getTemplateGroupsForSelect } from '@/actions/tasks';
+import type { TemplateGroupOption } from '@/actions/tasks';
 import { AgentPickerDialog } from './agent-picker-dialog';
 import type { AgentOption } from './agent-picker-dialog';
 
@@ -58,6 +60,10 @@ export function TransactionForm({ open, onOpenChange, transaction }: Transaction
   const [buyerAgents, setBuyerAgents] = useState<FormAgentInput[]>([]);
   const [pickerSide, setPickerSide] = useState<'listing' | 'buyer' | null>(null);
   const [allAgents, setAllAgents] = useState<AgentOption[]>([]);
+
+  // Template group selection (create mode only)
+  const [templateGroups, setTemplateGroups] = useState<TemplateGroupOption[]>([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
 
   // Load agents when form opens
   useEffect(() => {
@@ -151,6 +157,15 @@ export function TransactionForm({ open, onOpenChange, transaction }: Transaction
   const transactionType = watch('transactionType');
   const isListing = transactionType === 'listing' || transactionType === 'dual';
 
+  // Load template groups whenever transaction type changes (create mode only)
+  useEffect(() => {
+    if (isEdit || !transactionType) return;
+    getTemplateGroupsForSelect(transactionType).then((groups) => {
+      setTemplateGroups(groups);
+      setSelectedGroupIds(groups.filter((g) => g.isDefault).map((g) => g.id));
+    });
+  }, [transactionType, isEdit]);
+
   function handlePickerAdd(agentId: string, isPrimary: boolean) {
     const side = pickerSide!;
     const newEntry: FormAgentInput = { agentId, side, isPrimary };
@@ -186,7 +201,7 @@ export function TransactionForm({ open, onOpenChange, transaction }: Transaction
           toast.error(result.error ?? 'Something went wrong');
         }
       } else {
-        const result = await createTransaction(data, [...listingAgents, ...buyerAgents]);
+        const result = await createTransaction(data, [...listingAgents, ...buyerAgents], selectedGroupIds.length ? selectedGroupIds : undefined);
         if (result.success) {
           toast.success('Transaction created');
           onOpenChange(false);
@@ -313,6 +328,47 @@ export function TransactionForm({ open, onOpenChange, transaction }: Transaction
               </div>
             </div>
           </section>
+
+          {/* ── Task Template (create only) ──────────────── */}
+          {!isEdit && templateGroups.length > 0 && (
+            <>
+              <Separator />
+              <section className="space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Task Template
+                </p>
+                <div className="space-y-2">
+                  {templateGroups.map((group) => {
+                    const checked = selectedGroupIds.includes(group.id);
+                    return (
+                      <label
+                        key={group.id}
+                        className="flex items-center gap-3 rounded-md border px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          className="accent-primary h-4 w-4 shrink-0"
+                          checked={checked}
+                          onChange={() =>
+                            setSelectedGroupIds((prev) =>
+                              checked ? prev.filter((id) => id !== group.id) : [...prev, group.id]
+                            )
+                          }
+                        />
+                        <span className="text-sm flex-1">{group.name}</span>
+                        {group.isDefault && (
+                          <span className="text-xs text-muted-foreground">default</span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+                {selectedGroupIds.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No template selected — transaction will have no tasks.</p>
+                )}
+              </section>
+            </>
+          )}
 
           <Separator />
 

@@ -407,6 +407,32 @@ export async function getTaskTemplateGroups(): Promise<TaskTemplateGroup[]> {
     .orderBy(asc(taskTemplateGroups.sortOrder), asc(taskTemplateGroups.createdAt));
 }
 
+export type TemplateGroupOption = {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  transactionType: string;
+};
+
+export async function getTemplateGroupsForSelect(
+  transactionType: string,
+): Promise<TemplateGroupOption[]> {
+  const all = await db
+    .select({
+      id: taskTemplateGroups.id,
+      name: taskTemplateGroups.name,
+      isDefault: taskTemplateGroups.isDefault,
+      transactionType: taskTemplateGroups.transactionType,
+    })
+    .from(taskTemplateGroups)
+    .where(eq(taskTemplateGroups.isActive, true))
+    .orderBy(asc(taskTemplateGroups.sortOrder));
+
+  return all.filter(
+    (g) => g.transactionType === transactionType || g.transactionType === 'all',
+  );
+}
+
 export async function createTaskTemplateGroup(
   data: TemplateGroupFormValues,
 ): Promise<{ success: boolean; data?: TaskTemplateGroup; clonedTasks?: TaskTemplate[]; error?: string }> {
