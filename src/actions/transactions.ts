@@ -52,6 +52,7 @@ export type TransactionSummary = {
   buyerTcEmail: string | null;
   totalTasks: number;
   completedTasks: number;
+  incompleteTasks: number;
   listingAgents: TransactionAgentEntry[];
   buyerAgents: TransactionAgentEntry[];
 };
@@ -132,6 +133,7 @@ export async function getTransactions(): Promise<AgentTransactionGroup[]> {
         transactionId: transactionTasks.transactionId,
         total: count(),
         completed: sql<number>`sum(case when ${transactionTasks.status} = 'completed' then 1 else 0 end)`,
+        incomplete: sql<number>`sum(case when ${transactionTasks.status} in ('pending', 'in_progress', 'overdue') then 1 else 0 end)`,
       })
       .from(transactionTasks)
       .groupBy(transactionTasks.transactionId),
@@ -156,7 +158,7 @@ export async function getTransactions(): Promise<AgentTransactionGroup[]> {
   ]);
 
   const countMap = new Map(
-    taskCountRows.map((r) => [r.transactionId, { total: r.total, completed: r.completed ?? 0 }]),
+    taskCountRows.map((r) => [r.transactionId, { total: r.total, completed: r.completed ?? 0, incomplete: r.incomplete ?? 0 }]),
   );
 
   const agentMap = new Map<string, { listing: TransactionAgentEntry[]; buyer: TransactionAgentEntry[] }>();
@@ -177,12 +179,13 @@ export async function getTransactions(): Promise<AgentTransactionGroup[]> {
   }
 
   const summaries: TransactionSummary[] = rows.map((r) => {
-    const counts = countMap.get(r.id) ?? { total: 0, completed: 0 };
+    const counts = countMap.get(r.id) ?? { total: 0, completed: 0, incomplete: 0 };
     const txAgents = agentMap.get(r.id) ?? { listing: [], buyer: [] };
     return {
       ...r,
       totalTasks: counts.total,
       completedTasks: Number(counts.completed),
+      incompleteTasks: Number(counts.incomplete),
       listingAgents: txAgents.listing,
       buyerAgents: txAgents.buyer,
     };

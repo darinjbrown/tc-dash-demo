@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { Plus, Pencil, ToggleLeft, ToggleRight, ListChecks, Trash2 } from 'lucide-react';
+import { Plus, Pencil, ToggleLeft, ToggleRight, ListChecks, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -48,6 +48,7 @@ import {
   createTaskTemplateGroup,
   updateTaskTemplateGroup,
   deleteTaskTemplateGroup,
+  reorderTaskTemplates,
 } from '@/actions/tasks';
 import type { TaskTemplate, TaskTemplateGroup } from '@/db/schema';
 
@@ -85,6 +86,11 @@ const TX_TYPE_LABELS: Record<string, string> = {
   dual: 'Dual Agency',
   all: 'All',
 };
+
+const CATEGORY_ORDER = [
+  'listing', 'pre_escrow', 'opening', 'disclosures', 'inspections',
+  'contingencies', 'loan', 'appraisal', 'title', 'closing', 'post_closing',
+];
 
 // ─── Group form dialog ─────────────────────────────────────────────────────────
 
@@ -218,12 +224,14 @@ interface GroupTaskListProps {
   group: TaskTemplateGroup;
   allGroups: TaskTemplateGroup[];
   tasks: TaskTemplate[];
+  isAdmin: boolean;
   onTaskChange: (tasks: TaskTemplate[], isNew: boolean) => void;
+  onTaskReorder: (updatedTasks: TaskTemplate[]) => void;
   onToggle: (task: TaskTemplate) => void;
   onDelete: (task: TaskTemplate) => void;
 }
 
-function GroupTaskList({ group, allGroups, tasks, onTaskChange, onToggle, onDelete }: GroupTaskListProps) {
+function GroupTaskList({ group, allGroups, tasks, isAdmin, onTaskChange, onTaskReorder, onToggle, onDelete }: GroupTaskListProps) {
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskTemplate | null>(null);
   const [deletingTask, setDeletingTask] = useState<TaskTemplate | null>(null);
@@ -238,6 +246,34 @@ function GroupTaskList({ group, allGroups, tasks, onTaskChange, onToggle, onDele
     setFormOpen(true);
   }
 
+  function moveTask(category: string, taskId: string, direction: 'up' | 'down') {
+    const catTasks = [...tasks]
+      .filter((t) => t.category === category)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+    const idx = catTasks.findIndex((t) => t.id === taskId);
+    if (direction === 'up' && idx <= 0) return;
+    if (direction === 'down' && idx >= catTasks.length - 1) return;
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    [catTasks[idx], catTasks[swapIdx]] = [catTasks[swapIdx], catTasks[idx]];
+    const updated = catTasks.map((t, i) => ({ ...t, sortOrder: i * 10 }));
+    onTaskReorder(updated);
+    reorderTaskTemplates(updated.map((t) => t.id));
+  }
+
+  // Group tasks by category, sorted by sortOrder within each group
+  const grouped = new Map<string, TaskTemplate[]>();
+  for (const t of tasks) {
+    if (!grouped.has(t.category)) grouped.set(t.category, []);
+    grouped.get(t.category)!.push(t);
+  }
+  for (const catTasks of grouped.values()) {
+    catTasks.sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+  const sortedCategories = [
+    ...CATEGORY_ORDER.filter((c) => grouped.has(c)),
+    ...[...grouped.keys()].filter((c) => !CATEGORY_ORDER.includes(c)),
+  ];
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -245,10 +281,12 @@ function GroupTaskList({ group, allGroups, tasks, onTaskChange, onToggle, onDele
           {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'} &middot;{' '}
           {tasks.filter((t) => t.isActive).length} active
         </p>
-        <Button size="sm" onClick={openCreate}>
-          <Plus className="size-4 mr-1.5" />
-          Add Task
-        </Button>
+        {isAdmin && (
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="size-4 mr-1.5" />
+            Add Task
+          </Button>
+        )}
       </div>
 
       <div className="rounded-lg border overflow-hidden">
@@ -259,77 +297,114 @@ function GroupTaskList({ group, allGroups, tasks, onTaskChange, onToggle, onDele
             <p className="text-xs mt-1">Add tasks to this template.</p>
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead className="hidden sm:table-cell">Category</TableHead>
-                <TableHead className="hidden lg:table-cell">Due</TableHead>
-                <TableHead className="text-center">Active</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tasks.map((t) => (
-                <TableRow key={t.id} className={t.isActive ? '' : 'opacity-50'}>
-                  <TableCell>
-                    <div className="font-medium text-sm">{t.name}</div>
-                    {t.description && (
-                      <div className="text-xs text-muted-foreground truncate max-w-50">
-                        {t.description}
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="hidden sm:table-cell">
-                    <span className="text-sm">{CATEGORY_LABELS[t.category] ?? t.category}</span>
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell">
+          <div className="divide-y">
+            {sortedCategories.map((category) => {
+              const catTasks = grouped.get(category) ?? [];
+              return (
+                <div key={category}>
+                  <div className="flex items-center justify-between px-4 py-2 bg-muted/30">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      {CATEGORY_LABELS[category] ?? category}
+                    </p>
                     <span className="text-xs text-muted-foreground">
-                      {t.relativeDueDays >= 0 ? '+' : ''}
-                      {t.relativeDueDays}d from {RELATIVE_TO_LABELS[t.relativeTo] ?? t.relativeTo}
+                      {catTasks.filter((t) => t.isActive).length}/{catTasks.length} active
                     </span>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2"
-                      onClick={() => onToggle(t)}
-                    >
-                      {t.isActive ? (
-                        <ToggleRight className="size-4 text-green-600" />
-                      ) : (
-                        <ToggleLeft className="size-4 text-muted-foreground" />
-                      )}
-                      <span className="sr-only">{t.isActive ? 'Deactivate' : 'Activate'}</span>
-                    </Button>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 px-2"
-                        onClick={() => openEdit(t)}
-                      >
-                        <Pencil className="size-3.5" />
-                        <span className="sr-only">Edit</span>
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 px-2 text-destructive hover:text-destructive"
-                        onClick={() => setDeletingTask(t)}
-                      >
-                        <Trash2 className="size-3.5" />
-                        <span className="sr-only">Delete</span>
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  </div>
+                  <Table>
+                    <TableBody>
+                      {catTasks.map((t, idx) => (
+                        <TableRow key={t.id} className={t.isActive ? '' : 'opacity-50'}>
+                          <TableCell>
+                            <div className="font-medium text-sm">{t.name}</div>
+                            {t.description && (
+                              <div className="text-xs text-muted-foreground truncate max-w-50">
+                                {t.description}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell">
+                            <span className="text-xs text-muted-foreground">
+                              {t.relativeDueDays >= 0 ? '+' : ''}
+                              {t.relativeDueDays}d from {RELATIVE_TO_LABELS[t.relativeTo] ?? t.relativeTo}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {isAdmin ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2"
+                                onClick={() => onToggle(t)}
+                              >
+                                {t.isActive ? (
+                                  <ToggleRight className="size-4 text-green-600" />
+                                ) : (
+                                  <ToggleLeft className="size-4 text-muted-foreground" />
+                                )}
+                                <span className="sr-only">{t.isActive ? 'Deactivate' : 'Activate'}</span>
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                {t.isActive ? 'Active' : 'Inactive'}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              {isAdmin && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2"
+                                    onClick={() => openEdit(t)}
+                                  >
+                                    <Pencil className="size-3.5" />
+                                    <span className="sr-only">Edit</span>
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2 text-destructive hover:text-destructive"
+                                    onClick={() => setDeletingTask(t)}
+                                  >
+                                    <Trash2 className="size-3.5" />
+                                    <span className="sr-only">Delete</span>
+                                  </Button>
+                                </>
+                              )}
+                              <div className="flex flex-col">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-4 px-1"
+                                  disabled={idx === 0}
+                                  onClick={() => moveTask(category, t.id, 'up')}
+                                >
+                                  <ChevronUp className="size-3" />
+                                  <span className="sr-only">Move up</span>
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-4 px-1"
+                                  disabled={idx === catTasks.length - 1}
+                                  onClick={() => moveTask(category, t.id, 'down')}
+                                >
+                                  <ChevronDown className="size-3" />
+                                  <span className="sr-only">Move down</span>
+                                </Button>
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
@@ -375,9 +450,10 @@ function GroupTaskList({ group, allGroups, tasks, onTaskChange, onToggle, onDele
 interface TemplatesTabProps {
   initialGroups: TaskTemplateGroup[];
   initialTemplates: TaskTemplate[];
+  isAdmin: boolean;
 }
 
-export function TemplatesTab({ initialGroups, initialTemplates }: TemplatesTabProps) {
+export function TemplatesTab({ initialGroups, initialTemplates, isAdmin }: TemplatesTabProps) {
   const [groups, setGroups] = useState<TaskTemplateGroup[]>(initialGroups);
   const [templates, setTemplates] = useState<TaskTemplate[]>(initialTemplates);
   const [groupFormOpen, setGroupFormOpen] = useState(false);
@@ -399,6 +475,11 @@ export function TemplatesTab({ initialGroups, initialTemplates }: TemplatesTabPr
       setTemplates((prev) => [...prev, ...clonedTasks]);
     }
     setActiveTab(group.id);
+  }
+
+  function handleTaskReorder(updatedTasks: TaskTemplate[]) {
+    const updateMap = new Map(updatedTasks.map((t) => [t.id, t]));
+    setTemplates((prev) => prev.map((t) => updateMap.get(t.id) ?? t));
   }
 
   function handleTaskChange(changed: TaskTemplate[], isNew: boolean) {
@@ -463,15 +544,17 @@ export function TemplatesTab({ initialGroups, initialTemplates }: TemplatesTabPr
         <p className="text-sm text-muted-foreground">
           {groups.length} {groups.length === 1 ? 'template' : 'templates'}
         </p>
-        <Button
-          onClick={() => {
-            setEditingGroup(null);
-            setGroupFormOpen(true);
-          }}
-        >
-          <Plus className="size-4 mr-2" />
-          Add Template
-        </Button>
+        {isAdmin && (
+          <Button
+            onClick={() => {
+              setEditingGroup(null);
+              setGroupFormOpen(true);
+            }}
+          >
+            <Plus className="size-4 mr-2" />
+            Add Template
+          </Button>
+        )}
       </div>
 
       {groups.length === 0 ? (
@@ -509,40 +592,42 @@ export function TemplatesTab({ initialGroups, initialTemplates }: TemplatesTabPr
                   {g.description && (
                     <span className="text-xs text-muted-foreground">{g.description}</span>
                   )}
-                  <div className="flex items-center gap-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2"
-                      disabled={g.isDefault}
-                      title={g.isDefault ? 'Built-in templates cannot be edited' : undefined}
-                      onClick={() => {
-                        setEditingGroup(g);
-                        setGroupFormOpen(true);
-                      }}
-                    >
-                      <Pencil className="size-3.5" />
-                      <span className="sr-only">Edit template</span>
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2 text-destructive hover:text-destructive"
-                      disabled={g.isDefault}
-                      title={g.isDefault ? 'Built-in templates cannot be deleted' : undefined}
-                      onClick={() => !g.isDefault && handleDeleteGroup(g)}
-                    >
-                      <Trash2 className="size-3.5" />
-                      <span className="sr-only">Delete template</span>
-                    </Button>
-                  </div>
+                  {isAdmin && (
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2"
+                        onClick={() => {
+                          setEditingGroup(g);
+                          setGroupFormOpen(true);
+                        }}
+                      >
+                        <Pencil className="size-3.5" />
+                        <span className="sr-only">Edit template</span>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-destructive hover:text-destructive"
+                        disabled={g.isDefault}
+                        title={g.isDefault ? 'Built-in templates cannot be deleted' : undefined}
+                        onClick={() => !g.isDefault && handleDeleteGroup(g)}
+                      >
+                        <Trash2 className="size-3.5" />
+                        <span className="sr-only">Delete template</span>
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 <GroupTaskList
                   group={g}
                   allGroups={groups}
                   tasks={groupTasks}
+                  isAdmin={isAdmin}
                   onTaskChange={handleTaskChange}
+                  onTaskReorder={handleTaskReorder}
                   onToggle={handleToggleTask}
                   onDelete={handleDeleteTask}
                 />

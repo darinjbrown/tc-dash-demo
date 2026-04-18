@@ -38,6 +38,7 @@ export default function TransactionsPage() {
   const [search, setSearch] = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>('date-asc');
+  const [showHidden, setShowHidden] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -55,11 +56,18 @@ export default function TransactionsPage() {
     }
   }
 
+  function isHidden(tx: AgentTransactionGroup['transactions'][number]) {
+    if (tx.status === 'cancelled') return true;
+    if (tx.status === 'closed' && tx.incompleteTasks === 0) return true;
+    return false;
+  }
+
   // Client-side filtering
   const filtered = groups
     .map((group) => ({
       ...group,
       transactions: group.transactions.filter((tx) => {
+        if (!showHidden && isHidden(tx)) return false;
         const q = search.toLowerCase();
         const matchesSearch =
           !q ||
@@ -79,6 +87,8 @@ export default function TransactionsPage() {
       }),
     }))
     .filter((group) => group.transactions.length > 0);
+
+  const hiddenCount = groups.flatMap((g) => g.transactions).filter(isHidden).length;
 
   const totalCount = filtered.reduce((sum, g) => sum + g.transactions.length, 0);
 
@@ -172,6 +182,17 @@ export default function TransactionsPage() {
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {hiddenCount > 0 && (
+          <Button
+            variant={showHidden ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={() => setShowHidden((v) => !v)}
+            className="gap-1.5"
+          >
+            {showHidden ? 'Hide archived' : `Show archived (${hiddenCount})`}
+          </Button>
+        )}
 
         {selectedStatuses.length > 0 && (
           <Button

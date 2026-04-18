@@ -713,11 +713,49 @@ export async function deleteTaskTemplate(
       .where(eq(taskTemplates.id, id));
     if (!template) return { success: false, error: 'Task not found' };
 
+    // Detach any stamped transaction tasks before deleting the template
+    // so existing transaction tasks survive as standalone (custom) tasks.
+    await db
+      .update(transactionTasks)
+      .set({ templateId: null })
+      .where(eq(transactionTasks.templateId, id));
+
     await db.delete(taskTemplates).where(eq(taskTemplates.id, id));
     revalidatePath('/templates');
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Failed to delete task' };
+  }
+}
+
+export async function reorderTaskTemplates(
+  orderedIds: string[],
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await Promise.all(
+      orderedIds.map((id, i) =>
+        db.update(taskTemplates).set({ sortOrder: i * 10 }).where(eq(taskTemplates.id, id)),
+      ),
+    );
+    revalidatePath('/templates');
+    return { success: true };
+  } catch {
+    return { success: false, error: 'Failed to reorder tasks' };
+  }
+}
+
+export async function reorderTransactionTasks(
+  orderedIds: string[],
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await Promise.all(
+      orderedIds.map((id, i) =>
+        db.update(transactionTasks).set({ sortOrder: i * 10 }).where(eq(transactionTasks.id, id)),
+      ),
+    );
+    return { success: true };
+  } catch {
+    return { success: false, error: 'Failed to reorder tasks' };
   }
 }
 

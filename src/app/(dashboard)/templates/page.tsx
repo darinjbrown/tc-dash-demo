@@ -7,6 +7,8 @@ export default async function TemplatesPage() {
   const session = await auth();
   if (!session?.user) redirect('/login');
 
+  const isAdmin = (session.user as { role?: string }).role === 'admin';
+
   const [groups, templates] = await Promise.all([getTaskTemplateGroups(), getTaskTemplates()]);
 
   return (
@@ -14,11 +16,13 @@ export default async function TemplatesPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Task Templates</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Manage the task checklist templates stamped onto new transactions.
+          {isAdmin
+            ? 'Manage the task checklist templates stamped onto new transactions.'
+            : 'View task checklist templates used for new transactions.'}
         </p>
       </div>
 
-      <TemplatesTab initialGroups={groups} initialTemplates={templates} />
+      <TemplatesTab initialGroups={groups} initialTemplates={templates} isAdmin={isAdmin} />
     </div>
   );
 }

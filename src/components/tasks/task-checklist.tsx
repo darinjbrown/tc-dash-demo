@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { TaskItem } from './task-item';
 import { TaskForm } from './task-form';
+import { reorderTransactionTasks } from '@/actions/tasks';
 import type { TransactionTask } from '@/db/schema';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -41,17 +42,21 @@ interface TaskChecklistProps {
 
 export function TaskChecklist({ tasks, transactionId }: TaskChecklistProps) {
   const [addTaskOpen, setAddTaskOpen] = useState(false);
+  const [localTasks, setLocalTasks] = useState<TransactionTask[]>(tasks);
 
-  const completedCount = tasks.filter((t) => t.status === 'completed').length;
-  const totalCount = tasks.length;
+  const completedCount = localTasks.filter((t) => t.status === 'completed').length;
+  const totalCount = localTasks.length;
   const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
-  // Group tasks by category
+  // Group tasks by category, sorted by sortOrder within each category
   const grouped = new Map<string, TransactionTask[]>();
-  for (const task of tasks) {
+  for (const task of localTasks) {
     const cat = task.category;
     if (!grouped.has(cat)) grouped.set(cat, []);
     grouped.get(cat)!.push(task);
+  }
+  for (const catTasks of grouped.values()) {
+    catTasks.sort((a, b) => a.sortOrder - b.sortOrder);
   }
 
   // Sort categories by preferred order, unknowns appended last
@@ -59,6 +64,26 @@ export function TaskChecklist({ tasks, transactionId }: TaskChecklistProps) {
     ...CATEGORY_ORDER.filter((c) => grouped.has(c)),
     ...[...grouped.keys()].filter((c) => !CATEGORY_ORDER.includes(c)),
   ];
+
+  function moveTask(category: string, taskId: string, direction: 'up' | 'down') {
+    setLocalTasks((prev) => {
+      const catTasks = [...prev]
+        .filter((t) => t.category === category)
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+      const idx = catTasks.findIndex((t) => t.id === taskId);
+      if (direction === 'up' && idx <= 0) return prev;
+      if (direction === 'down' && idx >= catTasks.length - 1) return prev;
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+      [catTasks[idx], catTasks[swapIdx]] = [catTasks[swapIdx], catTasks[idx]];
+      const updated = catTasks.map((t, i) => ({ ...t, sortOrder: i * 10 }));
+      const updateMap = new Map(updated.map((t) => [t.id, t.sortOrder]));
+      reorderTransactionTasks(catTasks.map((t) => t.id));
+      return prev.map((t) => {
+        const so = updateMap.get(t.id);
+        return so !== undefined ? { ...t, sortOrder: so } : t;
+      });
+    });
+  }
 
   return (
     <>
@@ -103,8 +128,13 @@ export function TaskChecklist({ tasks, transactionId }: TaskChecklistProps) {
                   </span>
                 </div>
                 <div className="divide-y">
-                  {categoryTasks.map((task) => (
-                    <TaskItem key={task.id} task={task} />
+                  {categoryTasks.map((task, idx) => (
+                    <TaskItem
+                      key={task.id}
+                      task={task}
+                      onMoveUp={idx > 0 ? () => moveTask(category, task.id, 'up') : undefined}
+                      onMoveDown={idx < categoryTasks.length - 1 ? () => moveTask(category, task.id, 'down') : undefined}
+                    />
                   ))}
                 </div>
               </div>
