@@ -25,7 +25,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { AgentForm } from '@/components/agents/agent-form';
-import { getAgents, toggleAgentActive, deleteAgent } from '@/actions/agents';
+import { getAgents, toggleAgentActive, deleteAgent, toggleAgentInHouse } from '@/actions/agents';
 import type { AgentWithStats } from '@/actions/agents';
 
 export default function AgentsPage() {
@@ -86,6 +86,18 @@ export default function AgentsPage() {
     });
   }
 
+  function handleToggleInHouse(agent: AgentWithStats) {
+    startTransition(async () => {
+      const result = await toggleAgentInHouse(agent.id);
+      if (result.success) {
+        toast.success(agent.isInHouse ? 'Marked as outside agent' : 'Marked as in-house');
+        handleFormSuccess();
+      } else {
+        toast.error(result.error ?? 'Failed to update agent');
+      }
+    });
+  }
+
   return (
     <div className="p-4 sm:p-6 space-y-6">
       {/* Header */}
@@ -125,6 +137,7 @@ export default function AgentsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
+                <TableHead className="hidden sm:table-cell">Type</TableHead>
                 <TableHead className="hidden sm:table-cell">Contact</TableHead>
                 <TableHead className="hidden md:table-cell">License #</TableHead>
                 <TableHead className="text-center">Transactions</TableHead>
@@ -141,6 +154,18 @@ export default function AgentsPage() {
                       <Mail className="size-3" />
                       {agent.email}
                     </div>
+                  </TableCell>
+
+                  <TableCell className="hidden sm:table-cell">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleInHouse(agent)}
+                      title="Click to toggle in-house status"
+                    >
+                      <Badge variant={agent.isInHouse ? 'default' : 'outline'} className="text-xs cursor-pointer">
+                        {agent.isInHouse ? 'In-House' : 'Outside'}
+                      </Badge>
+                    </button>
                   </TableCell>
 
                   <TableCell className="hidden sm:table-cell">
