@@ -46,10 +46,10 @@ export function DashboardMainSection({
       </div>
       <div className="lg:col-start-1 lg:row-start-2">
         <TodoList
-          title="Due This Week"
+          title="Due in the Next 7 Days"
           tasks={upcomingTasks}
           variant="upcoming"
-          emptyMessage="You're all caught up — no tasks due this week."
+          emptyMessage="You're all caught up — no tasks due in the next 7 days."
         />
       </div>
       <div className="lg:col-start-2 lg:row-start-2">

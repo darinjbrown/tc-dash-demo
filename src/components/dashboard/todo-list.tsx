@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import { toast } from 'sonner';
-import { CheckCircle2, Clock, AlertCircle, MinusCircle } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, MinusCircle, Circle } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -127,9 +127,17 @@ export function TodoList({ title, tasks, variant, emptyMessage }: TodoListProps)
                 return (
                   <li key={task.id}>
                     <div className={cn(
-                      'flex items-baseline gap-1.5 flex-wrap px-4 py-2.5',
+                      'flex items-center gap-1.5 flex-wrap px-4 py-2.5',
                       variant === 'overdue' ? 'hover:bg-destructive/5' : 'hover:bg-muted/50',
                     )}>
+                      <button
+                        type="button"
+                        className="shrink-0 text-muted-foreground/30 hover:text-primary transition-colors"
+                        aria-label="Mark complete"
+                        onClick={() => openTask(task)}
+                      >
+                        <Circle className="size-4" />
+                      </button>
                       <Link
                         href={`/transactions/${task.transactionId}`}
                         className="text-sm text-muted-foreground shrink-0 truncate max-w-30 hover:underline"
