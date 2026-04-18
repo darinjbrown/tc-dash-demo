@@ -1,7 +1,14 @@
 'use server';
 
 import { db } from '@/db/client';
-import { transactionTasks, transactions, taskTemplates, taskTemplateGroups } from '@/db/schema';
+import {
+  transactionTasks,
+  transactions,
+  transactionAgents,
+  agents,
+  taskTemplates,
+  taskTemplateGroups,
+} from '@/db/schema';
 import type { TaskTemplate, TaskTemplateGroup } from '@/db/schema';
 import { templateGroupSchema } from '@/lib/template-group-schema';
 import type { TemplateGroupFormValues } from '@/lib/template-group-schema';
@@ -148,9 +155,12 @@ export async function getUpcomingTasks(days = 7): Promise<TaskWithTransaction[]>
       transactionId: transactionTasks.transactionId,
       address: transactions.address,
       city: transactions.city,
-      agentName: sql<string | null>`coalesce(
-        (select name from agents where agents.id = ${transactions.sellerAgentId}),
-        (select name from agents where agents.id = ${transactions.buyerAgentId})
+      agentName: sql<string | null>`(
+        select ${agents.name} from ${transactionAgents}
+        join ${agents} on ${agents.id} = ${transactionAgents.agentId}
+        where ${transactionAgents.transactionId} = ${transactions.id}
+        order by ${transactionAgents.isPrimary} desc, ${transactionAgents.sortOrder}
+        limit 1
       )`,
     })
     .from(transactionTasks)
@@ -184,9 +194,12 @@ export async function getOverdueTasks(): Promise<TaskWithTransaction[]> {
       transactionId: transactionTasks.transactionId,
       address: transactions.address,
       city: transactions.city,
-      agentName: sql<string | null>`coalesce(
-        (select name from agents where agents.id = ${transactions.sellerAgentId}),
-        (select name from agents where agents.id = ${transactions.buyerAgentId})
+      agentName: sql<string | null>`(
+        select ${agents.name} from ${transactionAgents}
+        join ${agents} on ${agents.id} = ${transactionAgents.agentId}
+        where ${transactionAgents.transactionId} = ${transactions.id}
+        order by ${transactionAgents.isPrimary} desc, ${transactionAgents.sortOrder}
+        limit 1
       )`,
     })
     .from(transactionTasks)
@@ -227,9 +240,12 @@ export async function getUpcomingDeadlines(limit = 10): Promise<TaskWithTransact
       transactionId: transactionTasks.transactionId,
       address: transactions.address,
       city: transactions.city,
-      agentName: sql<string | null>`coalesce(
-        (select name from agents where agents.id = ${transactions.sellerAgentId}),
-        (select name from agents where agents.id = ${transactions.buyerAgentId})
+      agentName: sql<string | null>`(
+        select ${agents.name} from ${transactionAgents}
+        join ${agents} on ${agents.id} = ${transactionAgents.agentId}
+        where ${transactionAgents.transactionId} = ${transactions.id}
+        order by ${transactionAgents.isPrimary} desc, ${transactionAgents.sortOrder}
+        limit 1
       )`,
     })
     .from(transactionTasks)

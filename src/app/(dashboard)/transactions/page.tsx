@@ -68,8 +68,8 @@ export default function TransactionsPage() {
           (tx.mlsNumber ?? '').toLowerCase().includes(q) ||
           (tx.buyerName ?? '').toLowerCase().includes(q) ||
           (tx.sellerName ?? '').toLowerCase().includes(q) ||
-          (tx.sellerAgentName ?? '').toLowerCase().includes(q) ||
-          (tx.buyerAgentName ?? '').toLowerCase().includes(q) ||
+          tx.listingAgents.some((a) => a.name.toLowerCase().includes(q)) ||
+          tx.buyerAgents.some((a) => a.name.toLowerCase().includes(q)) ||
           (tx.sellerTcName ?? '').toLowerCase().includes(q) ||
           (tx.buyerTcName ?? '').toLowerCase().includes(q) ||
           (tx.expectedCloseDate ?? '').includes(q);

@@ -84,22 +84,6 @@ export const transactions = sqliteTable('transactions', {
   state: text('state').default('CA'),
   zipCode: text('zip_code'),
   mlsNumber: text('mls_number'),
-  // Legacy column — retained to match DB; not used in application logic
-  agentId: text('agent_id').references(() => agents.id),
-  // sellerAgentId = in-house agent representing the Seller (was listingAgentId)
-  sellerAgentId: text('listing_agent_id').references(() => agents.id),
-  sellerAgentIsInHouse: integer('seller_agent_is_in_house', { mode: 'boolean' }).default(false),
-  // Outside seller agent contact info (only used when sellerAgentIsInHouse = false)
-  sellerAgentCompany: text('seller_agent_company'),
-  sellerAgentPhone: text('seller_agent_phone'),
-  sellerAgentEmail: text('seller_agent_email'),
-  // buyerAgentId = in-house agent representing the Buyer (was sellingAgentId)
-  buyerAgentId: text('selling_agent_id').references(() => agents.id),
-  buyerAgentIsInHouse: integer('buyer_agent_is_in_house', { mode: 'boolean' }).default(false),
-  // Outside buyer agent contact info (only used when buyerAgentIsInHouse = false)
-  buyerAgentCompany: text('buyer_agent_company'),
-  buyerAgentPhone: text('buyer_agent_phone'),
-  buyerAgentEmail: text('buyer_agent_email'),
   // Seller-side TC contact info
   sellerTcName: text('seller_tc_name'),
   sellerTcEmail: text('seller_tc_email'),
@@ -130,9 +114,7 @@ export const transactions = sqliteTable('transactions', {
   loanOfficerPhone: text('loan_officer_phone'),
   loanOfficerEmail: text('loan_officer_email'),
   buyerName: text('buyer_name'),
-  buyerAgent: text('buyer_agent'),
   sellerName: text('seller_name'),
-  sellerAgent: text('seller_agent'),
   // Money stored in cents (integers)
   purchasePrice: integer('purchase_price'),
   earnestMoneyDeposit: integer('earnest_money_deposit'),
@@ -304,22 +286,10 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
 }));
 
 export const agentsRelations = relations(agents, ({ many }) => ({
-  sellerTransactions: many(transactions, { relationName: 'sellerAgent' }),
-  buyerTransactions: many(transactions, { relationName: 'buyerAgent' }),
   transactionAgents: many(transactionAgents),
 }));
 
-export const transactionsRelations = relations(transactions, ({ one, many }) => ({
-  sellerAgent: one(agents, {
-    fields: [transactions.sellerAgentId],
-    references: [agents.id],
-    relationName: 'sellerAgent',
-  }),
-  buyerAgent: one(agents, {
-    fields: [transactions.buyerAgentId],
-    references: [agents.id],
-    relationName: 'buyerAgent',
-  }),
+export const transactionsRelations = relations(transactions, ({ many }) => ({
   tasks: many(transactionTasks),
   activityLog: many(activityLog),
   transactionAgents: many(transactionAgents),

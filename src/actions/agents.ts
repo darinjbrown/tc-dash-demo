@@ -66,7 +66,7 @@ export async function getAgentsForSelect(): Promise<{
   phone: string | null;
   isInHouse: boolean;
 }[]> {
-  return db
+  const rows = await db
     .select({
       id: agents.id,
       name: agents.name,
@@ -78,6 +78,7 @@ export async function getAgentsForSelect(): Promise<{
     .from(agents)
     .where(eq(agents.isActive, true))
     .orderBy(asc(agents.name));
+  return rows.map((r) => ({ ...r, isInHouse: r.isInHouse ?? false }));
 }
 
 // ─── Mutations ────────────────────────────────────────────────────────────────
