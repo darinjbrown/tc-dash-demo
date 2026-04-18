@@ -39,8 +39,6 @@ export function ActiveTransactionsCard({ transactions, collapsedHeight }: Active
     setIsOverflowing(el.scrollHeight > el.clientHeight);
   }, [transactions, collapsedHeight]);
 
-  // When collapsed: items-stretch drives the card height to match the stats grid.
-  // When expanded: self-start breaks out of stretch so the card grows to full content.
   return (
     <Card
       className="flex flex-col overflow-hidden"
