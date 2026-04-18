@@ -5,7 +5,6 @@ import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  ArrowLeft,
   Edit2,
   Archive,
   Phone,
@@ -16,6 +15,7 @@ import {
   Building2,
   X,
   Plus,
+  Printer,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
@@ -327,8 +327,183 @@ export function TransactionDetail({ transaction: tx }: TransactionDetailProps) {
     });
   }
 
+  const printDate = format(new Date(), 'MMM d, yyyy');
+
   return (
     <>
+      {/* ── Print-only view ───────────────────────────────── */}
+      <div className="hidden print:block text-black text-sm leading-snug">
+        {/* Print header */}
+        <div className="mb-4 pb-3 border-b border-gray-300">
+          <h1 className="text-xl font-bold">{tx.address}</h1>
+          {(tx.city || tx.state) && (
+            <p className="text-sm text-gray-600">{[tx.city, tx.state, tx.zipCode].filter(Boolean).join(', ')}</p>
+          )}
+          <div className="flex gap-4 mt-1 text-xs text-gray-500">
+            <span className="capitalize font-medium">{statusCfg.label}</span>
+            <span className="capitalize">{tx.transactionType}</span>
+            {tx.mlsNumber && <span>MLS {tx.mlsNumber}</span>}
+            <span className="ml-auto">Printed {printDate}</span>
+          </div>
+        </div>
+
+        {/* Key dates + financials */}
+        <div className="grid grid-cols-2 gap-6 mb-4">
+          <div>
+            <h2 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Key Dates</h2>
+            <table className="w-full text-xs">
+              <tbody>
+                {[
+                  ['Contract Date', tx.contractDate],
+                  ['Acceptance', tx.acceptanceDate],
+                  ['Verification of Funds', tx.verificationOfFundsDate],
+                  ['Earnest Money Due', tx.earnestMoneyDueDate],
+                  ['Inspection Contingency', tx.inspectionContingencyDate],
+                  ['Insurance Contingency', tx.insuranceContingencyDate],
+                  ['Loan Contingency', tx.loanContingencyDate],
+                  ['Appraisal Contingency', tx.appraisalContingencyDate],
+                  ['HOA Docs Due', tx.hoaDocsDueDate],
+                  ['Expected Close', tx.expectedCloseDate],
+                  ['Actual Close', tx.actualCloseDate],
+                ].map(([label, value]) => (
+                  <tr key={label} className="border-b border-gray-100">
+                    <td className="py-0.5 text-gray-500 pr-3">{label}</td>
+                    <td className="py-0.5 font-medium text-right">
+                      {value ? format(parseISO(value as string), 'MMM d, yyyy') : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <h2 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Financials</h2>
+            <table className="w-full text-xs mb-4">
+              <tbody>
+                {([
+                  tx.propertyType ? ['Property Type', tx.propertyType.replace('_', ' ')] : null,
+                  tx.purchasePrice != null ? ['Purchase Price', formatCurrency(tx.purchasePrice)] : null,
+                  tx.earnestMoneyDeposit != null ? ['Earnest Money', formatCurrency(tx.earnestMoneyDeposit)] : null,
+                  tx.buyerCommissionPercent ? ['Buyer Commission', `${tx.buyerCommissionPercent}%`] : null,
+                  tx.listingCommissionPercent ? ['Listing Commission', `${tx.listingCommissionPercent}%`] : null,
+                  tx.escrowNumber ? ['Escrow #', tx.escrowNumber] : null,
+                  tx.escrowCompany ? ['Escrow Company', tx.escrowCompany] : null,
+                ] as ([string, string] | null)[]).filter((r): r is [string, string] => r !== null).map(([label, value]) => (
+                  <tr key={label} className="border-b border-gray-100">
+                    <td className="py-0.5 text-gray-500 pr-3 capitalize">{label}</td>
+                    <td className="py-0.5 font-medium text-right capitalize">{value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <h2 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2 mt-4">Parties</h2>
+            <table className="w-full text-xs">
+              <tbody>
+                {tx.sellerName && (
+                  <tr className="border-b border-gray-100">
+                    <td className="py-0.5 text-gray-500 pr-3">Seller</td>
+                    <td className="py-0.5 font-medium">{tx.sellerName}</td>
+                  </tr>
+                )}
+                {tx.buyerName && (
+                  <tr className="border-b border-gray-100">
+                    <td className="py-0.5 text-gray-500 pr-3">Buyer</td>
+                    <td className="py-0.5 font-medium">{tx.buyerName}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Agents */}
+        {(listingAgents.length > 0 || buyerAgents.length > 0) && (
+          <div className="grid grid-cols-2 gap-6 mb-4">
+            <div>
+              <h2 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Listing Agents</h2>
+              {listingAgents.length === 0 ? <p className="text-xs text-gray-400">None</p> : listingAgents.map((a) => (
+                <div key={a.agentId} className="mb-2 text-xs">
+                  <p className="font-semibold">{a.name}{a.isPrimary ? ' ★' : ''}</p>
+                  {a.broker && <p className="text-gray-500">{a.broker}</p>}
+                  {a.phone && <p>{a.phone}</p>}
+                  {a.email && <p className="text-gray-600">{a.email}</p>}
+                </div>
+              ))}
+            </div>
+            <div>
+              <h2 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Buyer&apos;s Agents</h2>
+              {buyerAgents.length === 0 ? <p className="text-xs text-gray-400">None</p> : buyerAgents.map((a) => (
+                <div key={a.agentId} className="mb-2 text-xs">
+                  <p className="font-semibold">{a.name}{a.isPrimary ? ' ★' : ''}</p>
+                  {a.broker && <p className="text-gray-500">{a.broker}</p>}
+                  {a.phone && <p>{a.phone}</p>}
+                  {a.email && <p className="text-gray-600">{a.email}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Contacts */}
+        <div className="grid grid-cols-3 gap-4 mb-4">
+          {[
+            { title: "Seller's TC", name: tx.sellerTcName, phone: tx.sellerTcPhone, email: tx.sellerTcEmail },
+            { title: "Buyer's TC", name: tx.buyerTcName, phone: tx.buyerTcPhone, email: tx.buyerTcEmail },
+            { title: 'Escrow Officer', name: tx.escrowOfficer, phone: tx.escrowOfficerPhone, email: tx.escrowOfficerEmail },
+            { title: 'Loan Officer', name: tx.loanOfficer, phone: tx.loanOfficerPhone, email: tx.loanOfficerEmail },
+          ].filter((c) => c.name || c.phone || c.email).map((c) => (
+            <div key={c.title} className="text-xs">
+              <p className="font-bold uppercase tracking-wide text-gray-500 text-[10px] mb-1">{c.title}</p>
+              {c.name && <p className="font-medium">{c.name}</p>}
+              {c.phone && <p className="text-gray-600">{c.phone}</p>}
+              {c.email && <p className="text-gray-600 truncate">{c.email}</p>}
+            </div>
+          ))}
+        </div>
+
+        {/* Notes */}
+        {notes && (
+          <div className="mb-4">
+            <h2 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">Notes</h2>
+            <p className="text-xs whitespace-pre-wrap text-gray-700 border border-gray-200 rounded p-2">{notes}</p>
+          </div>
+        )}
+
+        {/* Tasks */}
+        {tx.tasks.length > 0 && (
+          <div>
+            <h2 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">
+              Tasks ({tx.tasks.filter((t) => t.status === 'completed').length}/{tx.tasks.length} completed)
+            </h2>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-300">
+                  <th className="text-left py-1 font-semibold text-gray-500">Task</th>
+                  <th className="text-left py-1 font-semibold text-gray-500">Due</th>
+                  <th className="text-left py-1 font-semibold text-gray-500">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tx.tasks.map((task) => (
+                  <tr key={task.id} className="border-b border-gray-100">
+                    <td className="py-0.5 pr-4">{task.name}</td>
+                    <td className="py-0.5 pr-4 whitespace-nowrap">
+                      {task.dueDate ? format(parseISO(task.dueDate), 'MMM d, yyyy') : '—'}
+                    </td>
+                    <td className="py-0.5 capitalize">{task.status.replace('_', ' ')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ── Screen-only view ──────────────────────────────── */}
+      <div className="print:hidden">
+
       {/* ── Header ────────────────────────────────────────── */}
       <div className="space-y-3 mb-6">
         {/* Breadcrumb */}
@@ -384,6 +559,15 @@ export function TransactionDetail({ transaction: tx }: TransactionDetailProps) {
             <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
               <Edit2 className="size-4 mr-1.5" />
               Edit Details
+            </Button>
+
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => window.print()}
+            >
+              <Printer className="size-4 mr-1.5" />
+              Print
             </Button>
 
             <Button
@@ -682,6 +866,7 @@ export function TransactionDetail({ transaction: tx }: TransactionDetailProps) {
         onAdd={handleAddAgent}
         onAgentCreated={(a) => setAllAgents((prev) => [...prev, a])}
       />
+      </div>{/* end screen-only */}
     </>
   );
 }

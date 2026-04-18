@@ -142,3 +142,9 @@
     @apply bg-background text-foreground;
   }
 }
+
+@media print {
+  @page { margin: 0.65in; }
+  body { background: white !important; color: black !important; font-size: 11pt; }
+  nav, aside, header { display: none !important; }
+}
