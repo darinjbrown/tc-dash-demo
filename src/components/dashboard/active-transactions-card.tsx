@@ -61,7 +61,7 @@ export function ActiveTransactionsCard({ transactions, collapsedHeight }: Active
                 Expanded: overflow visible, natural height. */}
             <div ref={listRef} className={cn('divide-y', expanded ? '' : 'flex-1 overflow-hidden')}>
               {transactions.map((tx) => {
-                const agents = [tx.sellerAgentName, tx.buyerAgentName]
+                const agentDisplay = [tx.primaryListingAgent, tx.primaryBuyerAgent]
                   .filter(Boolean)
                   .join(' · ');
                 const closeDate = tx.expectedCloseDate
@@ -87,8 +87,8 @@ export function ActiveTransactionsCard({ transactions, collapsedHeight }: Active
                             <span className="text-sm text-muted-foreground shrink-0">{tx.city}</span>
                           )}
                         </div>
-                        {agents && (
-                          <p className="text-sm text-muted-foreground mt-0.5 truncate">{agents}</p>
+                        {agentDisplay && (
+                          <p className="text-sm text-muted-foreground mt-0.5 truncate">{agentDisplay}</p>
                         )}
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
