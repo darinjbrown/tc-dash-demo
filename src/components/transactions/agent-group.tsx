@@ -88,8 +88,8 @@ export function TransactionCard({ tx }: { tx: TransactionSummary }) {
     tx.totalTasks > 0 ? Math.round((tx.completedTasks / tx.totalTasks) * 100) : 0;
 
   const hasContacts =
-    tx.sellerAgentName || tx.sellerAgentPhone || tx.sellerAgentEmail ||
-    tx.buyerAgentName || tx.buyerAgentPhone || tx.buyerAgentEmail ||
+    tx.listingAgents.length > 0 ||
+    tx.buyerAgents.length > 0 ||
     tx.sellerTcName || tx.sellerTcPhone || tx.sellerTcEmail ||
     tx.buyerTcName || tx.buyerTcPhone || tx.buyerTcEmail;
 
@@ -122,18 +122,24 @@ export function TransactionCard({ tx }: { tx: TransactionSummary }) {
       {/* Contacts */}
       {hasContacts && (
         <div className="mt-3 space-y-1.5">
-          <ContactMini
-            label="Listing Agent"
-            name={tx.sellerAgentName}
-            phone={tx.sellerAgentPhone}
-            email={tx.sellerAgentEmail}
-          />
-          <ContactMini
-            label="Buyer's Agent"
-            name={tx.buyerAgentName}
-            phone={tx.buyerAgentPhone}
-            email={tx.buyerAgentEmail}
-          />
+          {tx.listingAgents.map((a) => (
+            <ContactMini
+              key={a.agentId}
+              label={a.isPrimary ? 'Listing Agent ★' : 'Listing Agent'}
+              name={a.name}
+              phone={a.phone}
+              email={a.email}
+            />
+          ))}
+          {tx.buyerAgents.map((a) => (
+            <ContactMini
+              key={a.agentId}
+              label={a.isPrimary ? "Buyer's Agent ★" : "Buyer's Agent"}
+              name={a.name}
+              phone={a.phone}
+              email={a.email}
+            />
+          ))}
           <ContactMini
             label="Seller TC"
             name={tx.sellerTcName}
