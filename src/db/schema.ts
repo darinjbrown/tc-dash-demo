@@ -159,6 +159,20 @@ export const transactions = sqliteTable('transactions', {
     .$defaultFn(() => new Date()),
 });
 
+export const transactionAgents = sqliteTable('transaction_agents', {
+  id: text('id').primaryKey(),
+  transactionId: text('transaction_id')
+    .notNull()
+    .references(() => transactions.id, { onDelete: 'cascade' }),
+  agentId: text('agent_id')
+    .notNull()
+    .references(() => agents.id),
+  side: text('side', { enum: ['listing', 'buyer'] }).notNull(),
+  isPrimary: integer('is_primary', { mode: 'boolean' }).default(false).notNull(),
+  sortOrder: integer('sort_order').default(0).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).$defaultFn(() => new Date()),
+});
+
 export const taskTemplateGroups = sqliteTable('task_template_groups', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
@@ -292,6 +306,7 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
 export const agentsRelations = relations(agents, ({ many }) => ({
   sellerTransactions: many(transactions, { relationName: 'sellerAgent' }),
   buyerTransactions: many(transactions, { relationName: 'buyerAgent' }),
+  transactionAgents: many(transactionAgents),
 }));
 
 export const transactionsRelations = relations(transactions, ({ one, many }) => ({
@@ -307,6 +322,7 @@ export const transactionsRelations = relations(transactions, ({ one, many }) => 
   }),
   tasks: many(transactionTasks),
   activityLog: many(activityLog),
+  transactionAgents: many(transactionAgents),
 }));
 
 export const taskTemplateGroupsRelations = relations(taskTemplateGroups, ({ many }) => ({
@@ -340,6 +356,17 @@ export const activityLogRelations = relations(activityLog, ({ one }) => ({
   user: one(users, { fields: [activityLog.userId], references: [users.id] }),
 }));
 
+export const transactionAgentsRelations = relations(transactionAgents, ({ one }) => ({
+  transaction: one(transactions, {
+    fields: [transactionAgents.transactionId],
+    references: [transactions.id],
+  }),
+  agent: one(agents, {
+    fields: [transactionAgents.agentId],
+    references: [agents.id],
+  }),
+}));
+
 // Inferred types for use throughout the app
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -356,3 +383,5 @@ export type NewTransactionTask = typeof transactionTasks.$inferInsert;
 export type ActivityLog = typeof activityLog.$inferSelect;
 export type NewActivityLog = typeof activityLog.$inferInsert;
 export type AccessRequest = typeof accessRequests.$inferSelect;
+export type TransactionAgent = typeof transactionAgents.$inferSelect;
+export type NewTransactionAgent = typeof transactionAgents.$inferInsert;
