@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Plus } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PhoneInput } from '@/components/ui/phone-input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -30,23 +30,15 @@ import { Separator } from '@/components/ui/separator';
 import { transactionSchema } from '@/lib/transaction-schema';
 import type { TransactionFormValues } from '@/lib/transaction-schema';
 import { createTransaction, updateTransaction } from '@/actions/transactions';
-import type { Transaction } from '@/db/schema';
-import { QuickAddAgentDialog } from './quick-add-agent-dialog';
-
-interface AgentOption {
-  id: string;
-  name: string;
-  broker: string | null;
-  email: string;
-  phone: string | null;
-}
+import type { TransactionDetail as TxDetail, FormAgentInput } from '@/actions/transactions';
+import { getAgentsForSelect } from '@/actions/agents';
+import { AgentPickerDialog } from './agent-picker-dialog';
+import type { AgentOption } from './agent-picker-dialog';
 
 interface TransactionFormProps {
-  agents: AgentOption[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Pass to edit an existing transaction. */
-  transaction?: Transaction;
+  transaction?: TxDetail;
 }
 
 function toFormDollars(cents: number | null | undefined): string {
@@ -54,181 +46,50 @@ function toFormDollars(cents: number | null | undefined): string {
   return (cents / 100).toString();
 }
 
-// ─── Agent Picker Field ───────────────────────────────────────────────────────
-// In-house: dropdown + read-only contact info from agent profile.
-// Outside: free-text fields for name, company, phone, email.
-
-interface AgentPickerFieldProps {
-  label: string;
-  agentIdField: 'sellerAgentId' | 'buyerAgentId';
-  isInHouseField: 'sellerAgentIsInHouse' | 'buyerAgentIsInHouse';
-  agentTextField: 'sellerAgent' | 'buyerAgent';
-  agentCompanyField: 'sellerAgentCompany' | 'buyerAgentCompany';
-  agentPhoneField: 'sellerAgentPhone' | 'buyerAgentPhone';
-  agentEmailField: 'sellerAgentEmail' | 'buyerAgentEmail';
-  agents: AgentOption[];
-  defaultAgentId?: string | null;
-  defaultIsInHouse?: boolean | null;
-  defaultAgentText?: string | null;
-  defaultAgentCompany?: string | null;
-  defaultAgentPhone?: string | null;
-  defaultAgentEmail?: string | null;
-  setValue: (field: keyof TransactionFormValues, value: string | boolean) => void;
-  register: ReturnType<typeof useForm<TransactionFormValues>>['register'];
-  onAddAgent: (newAgent: AgentOption) => void;
-}
-
-function AgentPickerField({
-  label,
-  agentIdField,
-  isInHouseField,
-  agentTextField,
-  agentCompanyField,
-  agentPhoneField,
-  agentEmailField,
-  agents,
-  defaultAgentId,
-  defaultIsInHouse,
-  defaultAgentText,
-  defaultAgentCompany,
-  defaultAgentPhone,
-  defaultAgentEmail,
-  setValue,
-  register,
-  onAddAgent,
-}: AgentPickerFieldProps) {
-  const [isInHouse, setIsInHouse] = useState<boolean>(defaultIsInHouse ?? false);
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(defaultAgentId ?? null);
-  const [quickAddOpen, setQuickAddOpen] = useState(false);
-
-  const selectedAgent = agents.find((a) => a.id === selectedAgentId) ?? null;
-
-  function handleInHouseToggle(checked: boolean) {
-    setIsInHouse(checked);
-    setValue(isInHouseField, checked);
-    if (!checked) {
-      setValue(agentIdField, '');
-      setSelectedAgentId(null);
-    } else {
-      setValue(agentTextField, '');
-      setValue(agentCompanyField, '');
-      setValue(agentPhoneField, '');
-      setValue(agentEmailField, '');
-    }
-  }
-
-  function handleAgentSelect(value: string) {
-    const id = value === '__none__' ? '' : value;
-    setValue(agentIdField, id);
-    setSelectedAgentId(id || null);
-  }
-
-  function handleAgentCreated(newAgent: AgentOption) {
-    onAddAgent(newAgent);
-    setValue(agentIdField, newAgent.id);
-    setSelectedAgentId(newAgent.id);
-  }
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <Label className="text-sm font-medium">{label}</Label>
-        <label className="flex items-center gap-1.5 cursor-pointer select-none">
-          <Checkbox
-            checked={isInHouse}
-            onCheckedChange={(checked) => handleInHouseToggle(checked === true)}
-          />
-          <span className="text-xs text-muted-foreground">In-House</span>
-        </label>
-      </div>
-
-      {isInHouse ? (
-        <div className="space-y-2">
-          <div className="flex gap-2">
-            <Select onValueChange={handleAgentSelect} defaultValue={defaultAgentId ?? '__none__'}>
-              <SelectTrigger className="flex-1">
-                <SelectValue placeholder="Select agent..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">— None —</SelectItem>
-                {agents.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    <span>{a.name}</span>
-                    {a.broker && (
-                      <span className="ml-1 text-muted-foreground text-xs">· {a.broker}</span>
-                    )}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={() => setQuickAddOpen(true)}
-              title="Add new agent"
-            >
-              <Plus className="size-4" />
-            </Button>
-          </div>
-          {selectedAgent && (
-            <div className="text-sm text-muted-foreground space-y-0.5 border-l-2 pl-3 ml-1">
-              {selectedAgent.broker && <p>{selectedAgent.broker}</p>}
-              {selectedAgent.phone && <p>{selectedAgent.phone}</p>}
-              {selectedAgent.email && <p>{selectedAgent.email}</p>}
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <Input
-            {...register(agentTextField)}
-            defaultValue={defaultAgentText ?? ''}
-            placeholder="Agent name"
-          />
-          <Input
-            {...register(agentCompanyField)}
-            defaultValue={defaultAgentCompany ?? ''}
-            placeholder="Brokerage / Company"
-          />
-          <div className="grid grid-cols-2 gap-2">
-            <PhoneInput
-              {...register(agentPhoneField)}
-              defaultValue={defaultAgentPhone ?? ''}
-              placeholder="(707) 000-0000"
-            />
-            <Input
-              type="email"
-              {...register(agentEmailField)}
-              defaultValue={defaultAgentEmail ?? ''}
-              placeholder="agent@example.com"
-            />
-          </div>
-        </div>
-      )}
-
-      <QuickAddAgentDialog
-        open={quickAddOpen}
-        onOpenChange={setQuickAddOpen}
-        onAgentCreated={handleAgentCreated}
-      />
-    </div>
-  );
-}
-
 // ─── Main form ────────────────────────────────────────────────────────────────
 
-export function TransactionForm({ agents: initialAgents, open, onOpenChange, transaction }: TransactionFormProps) {
+export function TransactionForm({ open, onOpenChange, transaction }: TransactionFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  // Track only agents added mid-session (quick-add). Merge with the prop so
-  // late-arriving prop updates (async fetch on list page) are always reflected.
-  const [addedAgents, setAddedAgents] = useState<AgentOption[]>([]);
-  const agents = [
-    ...initialAgents,
-    ...addedAgents.filter((a) => !initialAgents.find((b) => b.id === a.id)),
-  ];
   const isEdit = !!transaction;
+
+  // Multi-agent state
+  const [listingAgents, setListingAgents] = useState<FormAgentInput[]>([]);
+  const [buyerAgents, setBuyerAgents] = useState<FormAgentInput[]>([]);
+  const [pickerSide, setPickerSide] = useState<'listing' | 'buyer' | null>(null);
+  const [allAgents, setAllAgents] = useState<AgentOption[]>([]);
+
+  // Load agents when form opens
+  useEffect(() => {
+    if (open) {
+      getAgentsForSelect().then((data) =>
+        setAllAgents(data.map((a) => ({ ...a, isInHouse: a.isInHouse ?? false })))
+      );
+    }
+  }, [open]);
+
+  // Pre-populate agents when editing
+  useEffect(() => {
+    if (transaction) {
+      setListingAgents(
+        (transaction.listingAgents ?? []).map((a) => ({
+          agentId: a.agentId,
+          side: 'listing' as const,
+          isPrimary: a.isPrimary,
+        }))
+      );
+      setBuyerAgents(
+        (transaction.buyerAgents ?? []).map((a) => ({
+          agentId: a.agentId,
+          side: 'buyer' as const,
+          isPrimary: a.isPrimary,
+        }))
+      );
+    } else {
+      setListingAgents([]);
+      setBuyerAgents([]);
+    }
+  }, [transaction, open]);
 
   const {
     register,
@@ -246,16 +107,6 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
           state: transaction.state ?? 'CA',
           zipCode: transaction.zipCode ?? '',
           mlsNumber: transaction.mlsNumber ?? '',
-          sellerAgentId: transaction.sellerAgentId ?? '',
-          sellerAgentIsInHouse: transaction.sellerAgentIsInHouse ?? false,
-          sellerAgentCompany: transaction.sellerAgentCompany ?? '',
-          sellerAgentPhone: transaction.sellerAgentPhone ?? '',
-          sellerAgentEmail: transaction.sellerAgentEmail ?? '',
-          buyerAgentId: transaction.buyerAgentId ?? '',
-          buyerAgentIsInHouse: transaction.buyerAgentIsInHouse ?? false,
-          buyerAgentCompany: transaction.buyerAgentCompany ?? '',
-          buyerAgentPhone: transaction.buyerAgentPhone ?? '',
-          buyerAgentEmail: transaction.buyerAgentEmail ?? '',
           sellerTcName: transaction.sellerTcName ?? '',
           sellerTcEmail: transaction.sellerTcEmail ?? '',
           sellerTcPhone: transaction.sellerTcPhone ?? '',
@@ -266,9 +117,7 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
           status: transaction.status,
           propertyType: transaction.propertyType ?? undefined,
           buyerName: transaction.buyerName ?? '',
-          buyerAgent: transaction.buyerAgent ?? '',
           sellerName: transaction.sellerName ?? '',
-          sellerAgent: transaction.sellerAgent ?? '',
           purchasePrice: toFormDollars(transaction.purchasePrice),
           earnestMoneyDeposit: toFormDollars(transaction.earnestMoneyDeposit),
           buyerCommissionPercent: transaction.buyerCommissionPercent ?? '',
@@ -290,24 +139,38 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
           escrowOfficer: transaction.escrowOfficer ?? '',
           escrowOfficerPhone: transaction.escrowOfficerPhone ?? '',
           escrowOfficerEmail: transaction.escrowOfficerEmail ?? '',
-
           lenderName: transaction.lenderName ?? '',
           loanOfficer: transaction.loanOfficer ?? '',
           loanOfficerPhone: transaction.loanOfficerPhone ?? '',
           loanOfficerEmail: transaction.loanOfficerEmail ?? '',
           notes: transaction.notes ?? '',
         }
-      : { state: 'CA', status: 'pending', transactionType: 'purchase', sellerAgentIsInHouse: false, buyerAgentIsInHouse: false },
+      : { state: 'CA', status: 'pending', transactionType: 'purchase' },
   });
 
   const transactionType = watch('transactionType');
   const isListing = transactionType === 'listing' || transactionType === 'dual';
 
-  function handleAgentAdded(newAgent: AgentOption) {
-    setAddedAgents((prev) => {
-      if (prev.find((a) => a.id === newAgent.id)) return prev;
-      return [...prev, newAgent];
-    });
+  function handlePickerAdd(agentId: string, isPrimary: boolean) {
+    const side = pickerSide!;
+    const newEntry: FormAgentInput = { agentId, side, isPrimary };
+    if (side === 'listing') {
+      setListingAgents((prev) => {
+        const cleared = isPrimary ? prev.map((a) => ({ ...a, isPrimary: false })) : prev;
+        return [...cleared, newEntry];
+      });
+    } else {
+      setBuyerAgents((prev) => {
+        const cleared = isPrimary ? prev.map((a) => ({ ...a, isPrimary: false })) : prev;
+        return [...cleared, newEntry];
+      });
+    }
+    setPickerSide(null);
+  }
+
+  function removeFormAgent(agentId: string, side: 'listing' | 'buyer') {
+    if (side === 'listing') setListingAgents((prev) => prev.filter((a) => a.agentId !== agentId));
+    else setBuyerAgents((prev) => prev.filter((a) => a.agentId !== agentId));
   }
 
   function onSubmit(data: TransactionFormValues) {
@@ -323,7 +186,7 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
           toast.error(result.error ?? 'Something went wrong');
         }
       } else {
-        const result = await createTransaction(data);
+        const result = await createTransaction(data, [...listingAgents, ...buyerAgents]);
         if (result.success) {
           toast.success('Transaction created');
           onOpenChange(false);
@@ -459,45 +322,87 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
               Agents
             </p>
 
-            <AgentPickerField
-              label="Listing Agent"
-              agentIdField="sellerAgentId"
-              isInHouseField="sellerAgentIsInHouse"
-              agentTextField="sellerAgent"
-              agentCompanyField="sellerAgentCompany"
-              agentPhoneField="sellerAgentPhone"
-              agentEmailField="sellerAgentEmail"
-              agents={agents}
-              defaultAgentId={transaction?.sellerAgentId}
-              defaultIsInHouse={transaction?.sellerAgentIsInHouse ?? false}
-              defaultAgentText={transaction?.sellerAgent}
-              defaultAgentCompany={transaction?.sellerAgentCompany}
-              defaultAgentPhone={transaction?.sellerAgentPhone}
-              defaultAgentEmail={transaction?.sellerAgentEmail}
-              setValue={setValue}
-              register={register}
-              onAddAgent={handleAgentAdded}
-            />
+            {/* Listing Agents */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Listing Agents</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => setPickerSide('listing')}
+                >
+                  <Plus className="size-3" /> Add
+                </Button>
+              </div>
+              {listingAgents.map((a) => {
+                const info = allAgents.find((ag) => ag.id === a.agentId);
+                return (
+                  <div key={a.agentId} className="flex items-center justify-between text-sm border rounded px-3 py-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-medium truncate">{info?.name ?? a.agentId}</span>
+                      {a.isPrimary && (
+                        <Badge className="text-[10px] px-1.5 py-0 h-4 shrink-0">Primary</Badge>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive shrink-0"
+                      onClick={() => removeFormAgent(a.agentId, 'listing')}
+                    >
+                      <X className="size-3" />
+                    </Button>
+                  </div>
+                );
+              })}
+              {listingAgents.length === 0 && (
+                <p className="text-xs text-muted-foreground italic">No listing agents added</p>
+              )}
+            </div>
 
-            <AgentPickerField
-              label="Buyer's Agent"
-              agentIdField="buyerAgentId"
-              isInHouseField="buyerAgentIsInHouse"
-              agentTextField="buyerAgent"
-              agentCompanyField="buyerAgentCompany"
-              agentPhoneField="buyerAgentPhone"
-              agentEmailField="buyerAgentEmail"
-              agents={agents}
-              defaultAgentId={transaction?.buyerAgentId}
-              defaultIsInHouse={transaction?.buyerAgentIsInHouse ?? false}
-              defaultAgentText={transaction?.buyerAgent}
-              defaultAgentCompany={transaction?.buyerAgentCompany}
-              defaultAgentPhone={transaction?.buyerAgentPhone}
-              defaultAgentEmail={transaction?.buyerAgentEmail}
-              setValue={setValue}
-              register={register}
-              onAddAgent={handleAgentAdded}
-            />
+            {/* Buyer Agents */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Buyer&apos;s Agents</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => setPickerSide('buyer')}
+                >
+                  <Plus className="size-3" /> Add
+                </Button>
+              </div>
+              {buyerAgents.map((a) => {
+                const info = allAgents.find((ag) => ag.id === a.agentId);
+                return (
+                  <div key={a.agentId} className="flex items-center justify-between text-sm border rounded px-3 py-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-medium truncate">{info?.name ?? a.agentId}</span>
+                      {a.isPrimary && (
+                        <Badge className="text-[10px] px-1.5 py-0 h-4 shrink-0">Primary</Badge>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive shrink-0"
+                      onClick={() => removeFormAgent(a.agentId, 'buyer')}
+                    >
+                      <X className="size-3" />
+                    </Button>
+                  </div>
+                );
+              })}
+              {buyerAgents.length === 0 && (
+                <p className="text-xs text-muted-foreground italic">No buyer&apos;s agents added</p>
+              )}
+            </div>
           </section>
 
           <Separator />
@@ -678,7 +583,6 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
                 <Label htmlFor="escrowOfficerEmail">Escrow Email</Label>
                 <Input id="escrowOfficerEmail" type="email" {...register('escrowOfficerEmail')} />
               </div>
-
             </div>
           </section>
 
@@ -744,6 +648,20 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
           </SheetFooter>
         </form>
       </SheetContent>
+
+      <AgentPickerDialog
+        open={!!pickerSide}
+        onOpenChange={(v) => !v && setPickerSide(null)}
+        side={pickerSide ?? 'listing'}
+        existingAgentIds={
+          pickerSide === 'listing'
+            ? listingAgents.map((a) => a.agentId)
+            : buyerAgents.map((a) => a.agentId)
+        }
+        agents={allAgents}
+        onAdd={handlePickerAdd}
+        onAgentCreated={(a) => setAllAgents((prev) => [...prev, a])}
+      />
     </Sheet>
   );
 }

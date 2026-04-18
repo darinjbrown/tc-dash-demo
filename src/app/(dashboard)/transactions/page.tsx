@@ -19,7 +19,6 @@ import {
 import { AgentGroup, TransactionCard } from '@/components/transactions/agent-group';
 import { TransactionForm } from '@/components/transactions/transaction-form';
 import { getTransactions } from '@/actions/transactions';
-import { getAgentsForSelect } from '@/actions/agents';
 import type { AgentTransactionGroup } from '@/actions/transactions';
 
 type SortMode = 'date-asc' | 'date-desc' | 'agent';
@@ -34,7 +33,6 @@ const STATUS_OPTIONS = [
 
 export default function TransactionsPage() {
   const [groups, setGroups] = useState<AgentTransactionGroup[]>([]);
-  const [agents, setAgents] = useState<{ id: string; name: string; broker: string | null; email: string; phone: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -43,9 +41,8 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([getTransactions(), getAgentsForSelect()]).then(([g, a]) => {
+    getTransactions().then((g) => {
       setGroups(g);
-      setAgents(a);
       setLoading(false);
     });
   }, []);
@@ -54,10 +51,7 @@ export default function TransactionsPage() {
   function handleCreateClose(open: boolean) {
     setCreateOpen(open);
     if (!open) {
-      Promise.all([getTransactions(), getAgentsForSelect()]).then(([g, a]) => {
-        setGroups(g);
-        setAgents(a);
-      });
+      getTransactions().then((g) => setGroups(g));
     }
   }
 
@@ -246,7 +240,7 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      <TransactionForm agents={agents} open={createOpen} onOpenChange={handleCreateClose} />
+      <TransactionForm open={createOpen} onOpenChange={handleCreateClose} />
     </div>
   );
 }
