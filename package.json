@@ -11,6 +11,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:seed": "npx tsx src/db/seed.ts",
+    "db:migrate-agents": "npx tsx src/db/migrate-to-multi-agent.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
