@@ -304,9 +304,6 @@ export function TransactionDetail({ transaction: tx, agents }: TransactionDetail
                   <DateRow label="Loan Contingency" value={tx.loanContingencyDate} />
                   <DateRow label="Appraisal Contingency" value={tx.appraisalContingencyDate} />
                   <DateRow label="HOA Docs Due" value={tx.hoaDocsDueDate} />
-                  {tx.listingActiveDate && (
-                    <DateRow label="Listing Active" value={tx.listingActiveDate} />
-                  )}
                   <DateRow label="Expected Close" value={tx.expectedCloseDate} />
                   <DateRow label="Actual Close" value={tx.actualCloseDate} />
                 </div>
@@ -388,7 +385,7 @@ export function TransactionDetail({ transaction: tx, agents }: TransactionDetail
 
                   {/* Agents */}
                   <ContactCard
-                    title="Seller's Agent"
+                    title="Listing Agent"
                     name={sellerAgentDisplayName}
                     phone={sellerAgentDisplayPhone}
                     email={sellerAgentDisplayEmail}

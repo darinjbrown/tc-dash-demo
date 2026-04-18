@@ -460,7 +460,7 @@ export function TransactionForm({ agents: initialAgents, open, onOpenChange, tra
             </p>
 
             <AgentPickerField
-              label="Seller's Agent"
+              label="Listing Agent"
               agentIdField="sellerAgentId"
               isInHouseField="sellerAgentIsInHouse"
               agentTextField="sellerAgent"

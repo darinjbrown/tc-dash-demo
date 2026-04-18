@@ -123,7 +123,7 @@ export function TransactionCard({ tx }: { tx: TransactionSummary }) {
       {hasContacts && (
         <div className="mt-3 space-y-1.5">
           <ContactMini
-            label="Seller's Agent"
+            label="Listing Agent"
             name={tx.sellerAgentName}
             phone={tx.sellerAgentPhone}
             email={tx.sellerAgentEmail}
