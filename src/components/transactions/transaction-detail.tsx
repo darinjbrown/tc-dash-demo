@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useRef } from 'react';
+import { useState, useTransition, useRef, useEffect } from 'react';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -14,6 +14,8 @@ import {
   DollarSign,
   Hash,
   Building2,
+  X,
+  Plus,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
@@ -30,9 +32,13 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/utils';
 import { updateTransactionStatus, updateTransactionNotes, deleteTransaction } from '@/actions/transactions';
-import type { TransactionDetail as TxDetail } from '@/actions/transactions';
+import type { TransactionDetail as TxDetail, TransactionAgentEntry } from '@/actions/transactions';
 import { TaskChecklist } from '@/components/tasks/task-checklist';
 import { TransactionForm } from './transaction-form';
+import { getAgentsForSelect } from '@/actions/agents';
+import { addTransactionAgent, removeTransactionAgent, setTransactionAgentPrimary } from '@/actions/transaction-agents';
+import { AgentPickerDialog } from './agent-picker-dialog';
+import type { AgentOption } from './agent-picker-dialog';
 
 // ─── Status config ─────────────────────────────────────────────────────────────
 
@@ -108,6 +114,73 @@ function ContactCard({
   );
 }
 
+// ─── Agent card ────────────────────────────────────────────────────────────────
+
+function AgentCard({
+  agent,
+  onRemove,
+  onSetPrimary,
+}: {
+  agent: TransactionAgentEntry;
+  onRemove: (agentId: string) => void;
+  onSetPrimary: (agentId: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1 p-3 rounded-md border bg-card text-sm">
+      <div className="flex items-center justify-between gap-2">
+        <span className={cn('font-semibold', agent.isPrimary && 'text-primary')}>
+          {agent.name}
+        </span>
+        <div className="flex items-center gap-1 shrink-0">
+          {agent.isPrimary && (
+            <Badge className="text-[10px] px-1.5 py-0 h-4">Primary</Badge>
+          )}
+          {!agent.isPrimary && (
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:text-foreground underline"
+              onClick={() => onSetPrimary(agent.agentId)}
+            >
+              Set primary
+            </button>
+          )}
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-destructive transition-colors ml-1"
+            onClick={() => onRemove(agent.agentId)}
+            aria-label="Remove agent"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      </div>
+      {agent.broker && <div className="text-xs text-muted-foreground">{agent.broker}</div>}
+      <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+        {agent.phone && (
+          <button
+            type="button"
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => { navigator.clipboard.writeText(agent.phone!); toast.success('Phone copied'); }}
+          >
+            <Phone className="size-3" />
+            {agent.phone}
+          </button>
+        )}
+        {agent.email && (
+          <button
+            type="button"
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => { navigator.clipboard.writeText(agent.email); toast.success('Email copied'); }}
+          >
+            <Mail className="size-3" />
+            <span className="truncate max-w-40">{agent.email}</span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Date row ─────────────────────────────────────────────────────────────────
 
 function DateRow({ label, value }: { label: string; value: string | null | undefined }) {
@@ -139,28 +212,28 @@ function activityDescription(action: string, details: string | null): string {
 
 interface TransactionDetailProps {
   transaction: TxDetail;
-  agents: { id: string; name: string; broker: string | null; email: string; phone: string | null }[];
 }
 
-export function TransactionDetail({ transaction: tx, agents }: TransactionDetailProps) {
+export function TransactionDetail({ transaction: tx }: TransactionDetailProps) {
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [notes, setNotes] = useState(tx.notes ?? '');
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [listingAgents, setListingAgents] = useState(tx.listingAgents);
+  const [buyerAgents, setBuyerAgents] = useState(tx.buyerAgents);
+  const [pickerOpen, setPickerOpen] = useState<'listing' | 'buyer' | null>(null);
+  const [allAgents, setAllAgents] = useState<AgentOption[]>([]);
+  const [, startAgentTransition] = useTransition();
+
+  useEffect(() => {
+    getAgentsForSelect().then((data) =>
+      setAllAgents(data.map((a) => ({ ...a, isInHouse: a.isInHouse ?? false })))
+    );
+  }, []);
+
   const statusCfg = STATUS_CONFIG[tx.status] ?? { label: tx.status, className: '' };
-
-  // Determine display name for outside agents
-  const sellerAgentDisplayName = tx.sellerAgentIsInHouse ? tx.sellerAgentName : tx.sellerAgent;
-  const sellerAgentDisplayPhone = tx.sellerAgentIsInHouse ? tx.sellerInHousePhone : tx.sellerAgentPhone;
-  const sellerAgentDisplayEmail = tx.sellerAgentIsInHouse ? tx.sellerInHouseEmail : tx.sellerAgentEmail;
-  const sellerAgentDisplayBroker = tx.sellerAgentIsInHouse ? tx.sellerInHouseBroker : tx.sellerAgentCompany;
-
-  const buyerAgentDisplayName = tx.buyerAgentIsInHouse ? tx.buyerAgentName : tx.buyerAgent;
-  const buyerAgentDisplayPhone = tx.buyerAgentIsInHouse ? tx.buyerInHousePhone : tx.buyerAgentPhone;
-  const buyerAgentDisplayEmail = tx.buyerAgentIsInHouse ? tx.buyerInHouseEmail : tx.buyerAgentEmail;
-  const buyerAgentDisplayBroker = tx.buyerAgentIsInHouse ? tx.buyerInHouseBroker : tx.buyerAgentCompany;
 
   function handleStatusChange(status: string) {
     startTransition(async () => {
@@ -191,6 +264,65 @@ export function TransactionDetail({ transaction: tx, agents }: TransactionDetail
         router.push('/transactions');
       } else {
         toast.error(result.error ?? 'Failed to archive');
+      }
+    });
+  }
+
+  function handleAddAgent(agentId: string, isPrimary: boolean) {
+    const side = pickerOpen!;
+    startAgentTransition(async () => {
+      const result = await addTransactionAgent(tx.id, agentId, side, isPrimary);
+      if (result.success) {
+        const agent = allAgents.find((a) => a.id === agentId)!;
+        const entry: TransactionAgentEntry = {
+          agentId,
+          name: agent.name,
+          phone: agent.phone,
+          email: agent.email,
+          broker: agent.broker,
+          isInHouse: agent.isInHouse,
+          isPrimary,
+        };
+        if (side === 'listing') {
+          setListingAgents((prev) =>
+            isPrimary ? prev.map((a) => ({ ...a, isPrimary: false })).concat(entry) : [...prev, entry]
+          );
+        } else {
+          setBuyerAgents((prev) =>
+            isPrimary ? prev.map((a) => ({ ...a, isPrimary: false })).concat(entry) : [...prev, entry]
+          );
+        }
+        toast.success('Agent added');
+      } else {
+        toast.error(result.error ?? 'Failed to add agent');
+      }
+    });
+  }
+
+  function handleRemoveAgent(agentId: string, side: 'listing' | 'buyer') {
+    startAgentTransition(async () => {
+      const result = await removeTransactionAgent(tx.id, agentId, side);
+      if (result.success) {
+        if (side === 'listing') setListingAgents((prev) => prev.filter((a) => a.agentId !== agentId));
+        else setBuyerAgents((prev) => prev.filter((a) => a.agentId !== agentId));
+        toast.success('Agent removed');
+      } else {
+        toast.error(result.error ?? 'Failed to remove agent');
+      }
+    });
+  }
+
+  function handleSetPrimary(agentId: string, side: 'listing' | 'buyer') {
+    startAgentTransition(async () => {
+      const result = await setTransactionAgentPrimary(tx.id, agentId, side);
+      if (result.success) {
+        const update = (prev: TransactionAgentEntry[]) =>
+          prev.map((a) => ({ ...a, isPrimary: a.agentId === agentId }));
+        if (side === 'listing') setListingAgents(update);
+        else setBuyerAgents(update);
+        toast.success('Primary agent updated');
+      } else {
+        toast.error(result.error ?? 'Failed to set primary');
       }
     });
   }
@@ -378,29 +510,73 @@ export function TransactionDetail({ transaction: tx, agents }: TransactionDetail
               <div className="rounded-lg border p-4">
                 <h3 className="text-sm font-semibold mb-1">Contacts</h3>
                 <Separator className="mb-3" />
+
+                {/* Listing Agents — full width */}
+                <div className="mb-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Listing Agents
+                    </h4>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 text-xs gap-1 px-2"
+                      onClick={() => setPickerOpen('listing')}
+                    >
+                      <Plus className="size-3" /> Add
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    {listingAgents.map((a) => (
+                      <AgentCard
+                        key={a.agentId}
+                        agent={a}
+                        onRemove={(id) => handleRemoveAgent(id, 'listing')}
+                        onSetPrimary={(id) => handleSetPrimary(id, 'listing')}
+                      />
+                    ))}
+                    {listingAgents.length === 0 && (
+                      <p className="text-xs text-muted-foreground italic">No listing agents</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Buyer Agents — full width */}
+                <div className="mb-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Buyer&apos;s Agents
+                    </h4>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 text-xs gap-1 px-2"
+                      onClick={() => setPickerOpen('buyer')}
+                    >
+                      <Plus className="size-3" /> Add
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    {buyerAgents.map((a) => (
+                      <AgentCard
+                        key={a.agentId}
+                        agent={a}
+                        onRemove={(id) => handleRemoveAgent(id, 'buyer')}
+                        onSetPrimary={(id) => handleSetPrimary(id, 'buyer')}
+                      />
+                    ))}
+                    {buyerAgents.length === 0 && (
+                      <p className="text-xs text-muted-foreground italic">No buyer&apos;s agents</p>
+                    )}
+                  </div>
+                </div>
+
+                <Separator className="mb-3" />
+
+                {/* Other contacts in 2-col grid */}
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {/* Parties */}
                   <ContactCard title="Seller" name={tx.sellerName} />
                   <ContactCard title="Buyer" name={tx.buyerName} />
-
-                  {/* Agents */}
-                  <ContactCard
-                    title="Listing Agent"
-                    name={sellerAgentDisplayName}
-                    phone={sellerAgentDisplayPhone}
-                    email={sellerAgentDisplayEmail}
-                    broker={sellerAgentDisplayBroker}
-                    isInHouse={tx.sellerAgentIsInHouse}
-                  />
-                  <ContactCard
-                    title="Buyer's Agent"
-                    name={buyerAgentDisplayName}
-                    phone={buyerAgentDisplayPhone}
-                    email={buyerAgentDisplayEmail}
-                    broker={buyerAgentDisplayBroker}
-                    isInHouse={tx.buyerAgentIsInHouse}
-                  />
-
                   <ContactCard
                     title="Seller's TC"
                     name={tx.sellerTcName}
@@ -413,14 +589,12 @@ export function TransactionDetail({ transaction: tx, agents }: TransactionDetail
                     phone={tx.buyerTcPhone}
                     email={tx.buyerTcEmail}
                   />
-
                   <ContactCard
                     title="Escrow Officer"
                     name={tx.escrowOfficer}
                     phone={tx.escrowOfficerPhone}
                     email={tx.escrowOfficerEmail}
                   />
-
                   <ContactCard
                     title="Loan Officer"
                     name={tx.loanOfficer}
@@ -490,10 +664,23 @@ export function TransactionDetail({ transaction: tx, agents }: TransactionDetail
 
       {/* Edit sheet */}
       <TransactionForm
-        agents={agents}
         open={editOpen}
         onOpenChange={setEditOpen}
         transaction={tx}
+      />
+
+      <AgentPickerDialog
+        open={!!pickerOpen}
+        onOpenChange={(v) => !v && setPickerOpen(null)}
+        side={pickerOpen ?? 'listing'}
+        existingAgentIds={
+          pickerOpen === 'listing'
+            ? listingAgents.map((a) => a.agentId)
+            : buyerAgents.map((a) => a.agentId)
+        }
+        agents={allAgents}
+        onAdd={handleAddAgent}
+        onAgentCreated={(a) => setAllAgents((prev) => [...prev, a])}
       />
     </>
   );
