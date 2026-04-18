@@ -81,7 +81,7 @@ function ContactMini({
 
 // ─── Transaction card ─────────────────────────────────────────────────────────
 
-function TransactionCard({ tx }: { tx: TransactionSummary }) {
+export function TransactionCard({ tx }: { tx: TransactionSummary }) {
   const statusCfg = STATUS_CONFIG[tx.status] ?? { label: tx.status, className: '' };
   const typeCfg = TYPE_CONFIG[tx.transactionType] ?? { label: tx.transactionType };
   const progressPct =

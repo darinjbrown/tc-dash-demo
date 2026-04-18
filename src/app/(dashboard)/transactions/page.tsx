@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Search, SlidersHorizontal } from 'lucide-react';
+import { Plus, Search, SlidersHorizontal, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -10,13 +10,19 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuCheckboxItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
-import { AgentGroup } from '@/components/transactions/agent-group';
+import { AgentGroup, TransactionCard } from '@/components/transactions/agent-group';
 import { TransactionForm } from '@/components/transactions/transaction-form';
 import { getTransactions } from '@/actions/transactions';
 import { getAgentsForSelect } from '@/actions/agents';
 import type { AgentTransactionGroup } from '@/actions/transactions';
+
+type SortMode = 'date-asc' | 'date-desc' | 'agent';
 
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pending' },
@@ -33,6 +39,7 @@ export default function TransactionsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [sortMode, setSortMode] = useState<SortMode>('date-asc');
 
   useEffect(() => {
     setLoading(true);
@@ -80,6 +87,16 @@ export default function TransactionsPage() {
     .filter((group) => group.transactions.length > 0);
 
   const totalCount = filtered.reduce((sum, g) => sum + g.transactions.length, 0);
+
+  const flatSorted = sortMode !== 'agent'
+    ? filtered
+        .flatMap((g) => g.transactions)
+        .sort((a, b) => {
+          const da = a.expectedCloseDate ?? '\uffff';
+          const db = b.expectedCloseDate ?? '\uffff';
+          return sortMode === 'date-asc' ? da.localeCompare(db) : db.localeCompare(da);
+        })
+    : null;
 
   function toggleStatus(status: string) {
     setSelectedStatuses((prev) =>
@@ -142,6 +159,26 @@ export default function TransactionsPage() {
           </DropdownMenuContent>
         </DropdownMenu>
 
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1.5">
+              {sortMode === 'date-asc' && <ArrowUp className="size-4" />}
+              {sortMode === 'date-desc' && <ArrowDown className="size-4" />}
+              {sortMode === 'agent' && <ArrowUpDown className="size-4" />}
+              Sort
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">By Close Date</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
+              <DropdownMenuRadioItem value="date-asc">Ascending (soonest first)</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="date-desc">Descending (latest first)</DropdownMenuRadioItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuRadioItem value="agent">By Agent</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         {selectedStatuses.length > 0 && (
           <Button
             variant="ghost"
@@ -194,6 +231,12 @@ export default function TransactionsPage() {
               </p>
             </>
           )}
+        </div>
+      ) : flatSorted ? (
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          {flatSorted.map((tx) => (
+            <TransactionCard key={tx.id} tx={tx} />
+          ))}
         </div>
       ) : (
         <div className="space-y-2">
