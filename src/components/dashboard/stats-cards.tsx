@@ -21,7 +21,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
       valueClass: 'text-amber-600 dark:text-amber-400',
     },
     {
-      title: 'Due This Week',
+      title: 'Due Next 7 Days',
       value: stats.tasksDueThisWeek,
       borderClass: 'border-l-primary',
       valueClass: 'text-primary',
