@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import type { DashboardStats } from '@/actions/tasks';
 import { cn } from '@/lib/utils';
 
@@ -9,50 +9,43 @@ interface StatsCardsProps {
 export function StatsCards({ stats }: StatsCardsProps) {
   const cards = [
     {
-      title: 'Overdue Tasks',
+      title: 'Overdue',
       value: stats.overdueTasks,
-      description: 'Past due or urgent',
-      valueClass: stats.overdueTasks > 0 ? 'text-destructive' : '',
-      cardClass: stats.overdueTasks > 0 ? 'border-destructive/40' : '',
+      borderClass: 'border-l-destructive',
+      valueClass: 'text-destructive',
     },
     {
       title: 'Due Today',
       value: stats.tasksDueToday,
-      description: 'Tasks due today',
-      valueClass: stats.tasksDueToday > 0 ? 'text-amber-600 dark:text-amber-400' : '',
-      cardClass: stats.tasksDueToday > 0 ? 'border-amber-400/40' : '',
+      borderClass: 'border-l-amber-500',
+      valueClass: 'text-amber-600 dark:text-amber-400',
     },
     {
-      title: 'Due Next 7 Days',
+      title: 'Due This Week',
       value: stats.tasksDueThisWeek,
-      description: 'Tasks due in the next 7 days',
-      valueClass: '',
-      cardClass: '',
+      borderClass: 'border-l-primary',
+      valueClass: 'text-primary',
     },
     {
-      title: 'Closing in 30 Days',
+      title: 'Closing Soon',
       value: stats.closingNext30Days,
-      description: 'Expected to close within 30 days',
-      valueClass: '',
-      cardClass: '',
+      borderClass: 'border-l-emerald-500',
+      valueClass: 'text-emerald-600 dark:text-emerald-400',
     },
   ];
 
   return (
-    <div className="grid gap-4 grid-cols-2">
-      {cards.map((card) => {
-        return (
-          <Card key={card.title} className={cn(card.cardClass)}>
-            <CardHeader className="pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={cn('text-2xl font-bold', card.valueClass)}>{card.value}</div>
-              <p className="text-sm text-muted-foreground mt-1">{card.description}</p>
-            </CardContent>
-          </Card>
-        );
-      })}
+    <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+      {cards.map((card) => (
+        <Card key={card.title} className={cn('border-l-4', card.borderClass)}>
+          <CardContent className="py-4">
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {card.title}
+            </div>
+            <div className={cn('text-3xl font-bold mt-1', card.valueClass)}>{card.value}</div>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 }
