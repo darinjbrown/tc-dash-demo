@@ -37,7 +37,13 @@ export function StatsCards({ stats }: StatsCardsProps) {
   return (
     <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
       {cards.map((card) => (
-        <Card key={card.title} className={cn('border-l-4', card.borderClass)}>
+        <Card
+          key={card.title}
+          className={cn(
+            'border-l-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md',
+            card.borderClass,
+          )}
+        >
           <CardContent className="py-4">
             <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {card.title}
