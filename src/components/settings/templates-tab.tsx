@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Plus, Pencil, ToggleLeft, ToggleRight, ListChecks, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -111,17 +111,19 @@ function GroupFormDialog({ group, open, onOpenChange, onSuccess }: GroupFormDial
   const isEdit = !!group;
   const isDefault = group?.isDefault ?? false;
 
-  // Reset local state when dialog opens with new data
-  const handleOpenChange = (val: boolean) => {
-    if (val) {
+  // Sync form state to the `group` prop whenever the dialog opens. Required
+  // because the parent controls `open` directly — Radix's Dialog only calls
+  // onOpenChange for its own state changes (escape/outside click/X), not for
+  // controlled opens, so a reset wired through onOpenChange would never fire.
+  useEffect(() => {
+    if (open) {
       setName(group?.name ?? '');
       setDescription(group?.description ?? '');
       setTransactionType(
         (group?.transactionType as 'listing' | 'purchase' | 'dual' | 'all') ?? 'listing',
       );
     }
-    onOpenChange(val);
-  };
+  }, [open, group]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -154,7 +156,7 @@ function GroupFormDialog({ group, open, onOpenChange, onSuccess }: GroupFormDial
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Template' : 'Add Template'}</DialogTitle>

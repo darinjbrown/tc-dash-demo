@@ -8,7 +8,9 @@ import {
 } from '@/actions/tasks';
 import { getPendingRequests } from '@/actions/access-requests';
 import { getActiveTransactionsList } from '@/actions/transactions';
-import { DashboardMainSection } from '@/components/dashboard/dashboard-main-section';
+import { StatsCards } from '@/components/dashboard/stats-cards';
+import { TodoList } from '@/components/dashboard/todo-list';
+import { ActiveTransactionsCard } from '@/components/dashboard/active-transactions-card';
 import { UpcomingDeadlines } from '@/components/dashboard/upcoming-deadlines';
 import { PendingRequestsCard } from '@/components/dashboard/pending-requests-card';
 
@@ -36,14 +38,28 @@ export default async function DashboardPage() {
         <PendingRequestsCard initialRequests={pendingRequests} />
       )}
 
-      <DashboardMainSection
-        activeTransactions={activeTransactions}
-        stats={stats}
-        upcomingTasks={upcomingTasks}
-        overdueTasks={overdueTasks}
-      />
+      <StatsCards stats={stats} />
 
-      <UpcomingDeadlines deadlines={deadlines} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <div className="space-y-6">
+          <ActiveTransactionsCard transactions={activeTransactions} />
+          <UpcomingDeadlines deadlines={deadlines} />
+        </div>
+        <div className="space-y-6">
+          <TodoList
+            title="Overdue & Urgent"
+            tasks={overdueTasks}
+            variant="overdue"
+            emptyMessage="No overdue or urgent tasks. Great work!"
+          />
+          <TodoList
+            title="Due in the Next 7 Days"
+            tasks={upcomingTasks}
+            variant="upcoming"
+            emptyMessage="You're all caught up — no tasks due in the next 7 days."
+          />
+        </div>
+      </div>
     </div>
   );
 }

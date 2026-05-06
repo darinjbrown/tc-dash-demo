@@ -558,7 +558,27 @@ export async function deleteTaskTemplateGroup(
     if (!group) return { success: false, error: 'Template group not found' };
     if (group.isDefault) return { success: false, error: 'Built-in templates cannot be deleted' };
 
-    await db.delete(taskTemplateGroups).where(eq(taskTemplateGroups.id, id));
+    // FK cascade by hand: detach stamped transaction tasks (so existing
+    // transactions keep them as standalone custom tasks), then delete the
+    // group's templates, then the group itself. Atomic via transaction.
+    await db.transaction(async (tx) => {
+      const groupTemplates = await tx
+        .select({ id: taskTemplates.id })
+        .from(taskTemplates)
+        .where(eq(taskTemplates.templateGroupId, id));
+
+      if (groupTemplates.length > 0) {
+        const templateIds = groupTemplates.map((t) => t.id);
+        await tx
+          .update(transactionTasks)
+          .set({ templateId: null })
+          .where(inArray(transactionTasks.templateId, templateIds));
+        await tx.delete(taskTemplates).where(eq(taskTemplates.templateGroupId, id));
+      }
+
+      await tx.delete(taskTemplateGroups).where(eq(taskTemplateGroups.id, id));
+    });
+
     revalidatePath('/templates');
     return { success: true };
   } catch (err) {
