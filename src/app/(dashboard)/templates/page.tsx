@@ -12,6 +12,7 @@ export default async function TemplatesPage() {
   const [groups, templates] = await Promise.all([getTaskTemplateGroups(), getTaskTemplates()]);
 
   return (
+
     <div className="p-4 sm:p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Task Templates</h1>
