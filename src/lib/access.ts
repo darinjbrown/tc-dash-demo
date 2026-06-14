@@ -3,6 +3,11 @@ import { auth } from '@/lib/auth';
 import { db } from '@/db/client';
 import { agents, transactions, transactionAgents } from '@/db/schema';
 import { inArray, sql, type SQL } from 'drizzle-orm';
+import { canManageAll, isReadOnlyRole } from '@/lib/roles';
+
+// Re-exported so server callers can keep importing role predicates from one
+// place. The Edge proxy imports them directly from '@/lib/roles' (Edge-safe).
+export { canManageAll, isReadOnlyRole } from '@/lib/roles';
 
 export type ViewerScope = {
   userId: string | null;
@@ -14,20 +19,6 @@ export type ViewerScope = {
 
 export function normalizeEmail(email: string | null | undefined): string {
   return (email ?? '').trim().toLowerCase();
-}
-
-// Roles permitted to see all data and perform writes. Anything NOT in this set
-// (the `agent` role, or any unrecognized/garbage role) is treated as a
-// restricted, read-only viewer. Allowlist, not denylist, so unknown roles are
-// fail-closed on BOTH the read and write paths.
-const PRIVILEGED_ROLES = new Set(['admin', 'broker', 'tc']);
-
-export function canManageAll(role: string): boolean {
-  return PRIVILEGED_ROLES.has(role);
-}
-
-export function isReadOnlyRole(role: string): boolean {
-  return !canManageAll(role);
 }
 
 export function computeViewerScope(input: {
