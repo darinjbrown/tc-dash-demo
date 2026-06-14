@@ -32,9 +32,8 @@ export type PasswordFormValues = z.infer<typeof passwordSchema>;
 export async function updateProfile(
   data: ProfileFormValues,
 ): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
-
+  // Self-service: any authenticated user (including read-only agents) may edit
+  // their own profile. Gated by the session check below, not requireWriteAccess.
   const parsed = profileSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
@@ -59,9 +58,8 @@ export async function updateProfile(
 export async function changePassword(
   data: PasswordFormValues,
 ): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
-
+  // Self-service: any authenticated user (including read-only agents) may change
+  // their own password. Gated by the session check below, not requireWriteAccess.
   const parsed = passwordSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
