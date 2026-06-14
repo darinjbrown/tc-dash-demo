@@ -14,6 +14,7 @@ import type { Transaction, TransactionTask } from '@/db/schema';
 import { eq, count, sql, asc, desc, inArray, and, notInArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/lib/auth';
+import { getViewerScope, transactionScopeCondition } from '@/lib/access';
 import { stampTasks, recalculateTaskDueDates } from '@/lib/task-stamping';
 import { transactionSchema } from '@/lib/transaction-schema';
 import type { TransactionFormValues } from '@/lib/transaction-schema';
@@ -121,6 +122,7 @@ export async function getTransactions(): Promise<AgentTransactionGroup[]> {
       buyerTcEmail: transactions.buyerTcEmail,
     })
     .from(transactions)
+    .where(transactionScopeCondition(await getViewerScope()))
     .orderBy(desc(transactions.createdAt));
 
   if (rows.length === 0) return [];
@@ -240,7 +242,7 @@ export async function getActiveTransactionsList(): Promise<ActiveTransactionRow[
       expectedCloseDate: transactions.expectedCloseDate,
     })
     .from(transactions)
-    .where(inArray(transactions.status, ['listed', 'in_escrow']))
+    .where(and(inArray(transactions.status, ['listed', 'in_escrow']), transactionScopeCondition(await getViewerScope())))
     .orderBy(asc(transactions.expectedCloseDate));
 
   if (rows.length === 0) return [];
@@ -349,7 +351,7 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
       updatedAt: transactions.updatedAt,
     })
     .from(transactions)
-    .where(eq(transactions.id, id));
+    .where(and(eq(transactions.id, id), transactionScopeCondition(await getViewerScope())));
 
   if (!txRow) return null;
 
