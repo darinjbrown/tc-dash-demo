@@ -14,7 +14,7 @@ import type { Transaction, TransactionTask } from '@/db/schema';
 import { eq, count, sql, asc, desc, inArray, and, notInArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/lib/auth';
-import { getViewerScope, transactionScopeCondition } from '@/lib/access';
+import { getViewerScope, transactionScopeCondition, requireWriteAccess } from '@/lib/access';
 import { stampTasks, recalculateTaskDueDates } from '@/lib/task-stamping';
 import { transactionSchema } from '@/lib/transaction-schema';
 import type { TransactionFormValues } from '@/lib/transaction-schema';
@@ -433,6 +433,9 @@ export async function createTransaction(
   agentInputs: FormAgentInput[] = [],
   templateGroupIds?: string[],
 ): Promise<{ success: boolean; data?: { id: string }; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   const parsed = transactionSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
@@ -546,6 +549,9 @@ export async function updateTransaction(
   id: string,
   data: TransactionFormValues,
 ): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   const parsed = transactionSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
@@ -650,6 +656,9 @@ export async function updateTransactionStatus(
   id: string,
   status: string,
 ): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   const session = await auth();
   const userId = session?.user?.id ?? null;
 
@@ -681,6 +690,9 @@ export async function updateTransactionNotes(
   id: string,
   notes: string,
 ): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   try {
     await db.update(transactions).set({ notes, updatedAt: new Date() }).where(eq(transactions.id, id));
     revalidatePath(`/transactions/${id}`);
@@ -691,6 +703,9 @@ export async function updateTransactionNotes(
 }
 
 export async function deleteTransaction(id: string): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   try {
     // Soft-delete: set status to 'cancelled'
     await db

@@ -5,6 +5,7 @@ import { agents, transactionAgents } from '@/db/schema';
 import type { Agent } from '@/db/schema';
 import { eq, asc, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { requireWriteAccess } from '@/lib/access';
 import { z } from 'zod';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -86,6 +87,9 @@ export async function getAgentsForSelect(): Promise<{
 export async function createAgent(
   data: AgentFormValues,
 ): Promise<{ success: boolean; data?: { id: string; name: string; broker: string | null; email: string; phone: string | null }; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   const parsed = agentSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
@@ -116,6 +120,9 @@ export async function updateAgent(
   id: string,
   data: AgentFormValues,
 ): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   const parsed = agentSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
@@ -147,6 +154,9 @@ export async function updateAgent(
 export async function deleteAgent(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   try {
     const linked = await db
       .select({ id: transactionAgents.id })
@@ -170,6 +180,9 @@ export async function deleteAgent(
 export async function toggleAgentActive(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   try {
     const [agent] = await db
       .select({ isActive: agents.isActive })
@@ -193,6 +206,9 @@ export async function toggleAgentActive(
 export async function toggleAgentInHouse(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   try {
     const [agent] = await db
       .select({ isInHouse: agents.isInHouse })

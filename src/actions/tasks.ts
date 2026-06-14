@@ -29,7 +29,7 @@ import {
 } from 'drizzle-orm';
 import { format, addDays } from 'date-fns';
 import { revalidatePath } from 'next/cache';
-import { getViewerScope, transactionScopeCondition } from '@/lib/access';
+import { getViewerScope, transactionScopeCondition, requireWriteAccess } from '@/lib/access';
 import { z } from 'zod';
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
@@ -285,6 +285,9 @@ export async function updateTaskStatus(
   status: 'pending' | 'in_progress' | 'completed' | 'overdue' | 'waived' | 'not_applicable',
   notes?: string,
 ): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   try {
     const updateData: {
       status: typeof status;
@@ -319,6 +322,9 @@ export async function createCustomTask(
     assignedTo?: string | null;
   },
 ): Promise<{ success: boolean; data?: { id: string }; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   try {
     const id = crypto.randomUUID();
     await db.insert(transactionTasks).values({
@@ -350,6 +356,9 @@ export async function snoozeTask(
   id: string,
   newDueDate: string,
 ): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   try {
     await db
       .update(transactionTasks)
@@ -450,6 +459,9 @@ export async function getTemplateGroupsForSelect(
 export async function createTaskTemplateGroup(
   data: TemplateGroupFormValues,
 ): Promise<{ success: boolean; data?: TaskTemplateGroup; clonedTasks?: TaskTemplate[]; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   const parsed = templateGroupSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
@@ -528,6 +540,9 @@ export async function updateTaskTemplateGroup(
   id: string,
   data: TemplateGroupFormValues,
 ): Promise<{ success: boolean; data?: TaskTemplateGroup; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   const parsed = templateGroupSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
@@ -564,6 +579,9 @@ export async function updateTaskTemplateGroup(
 export async function deleteTaskTemplateGroup(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   try {
     const [group] = await db
       .select({ isDefault: taskTemplateGroups.isDefault })
@@ -603,6 +621,9 @@ export async function deleteTaskTemplateGroup(
 export async function toggleTaskTemplateGroupActive(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   try {
     const [group] = await db
       .select({ isActive: taskTemplateGroups.isActive })
@@ -632,6 +653,9 @@ export async function createTaskTemplatesMulti(
   data: Omit<TaskTemplateFormValues, 'templateGroupId'>,
   groupIds: string[],
 ): Promise<{ success: boolean; data?: TaskTemplate[]; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   if (!groupIds.length) return { success: false, error: 'At least one template group is required' };
 
   const baseSchema = templateSchema.omit({ templateGroupId: true });
@@ -674,6 +698,9 @@ export async function createTaskTemplatesMulti(
 export async function createTaskTemplate(
   data: TaskTemplateFormValues,
 ): Promise<{ success: boolean; data?: TaskTemplate; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   const parsed = templateSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
@@ -707,6 +734,9 @@ export async function updateTaskTemplate(
   id: string,
   data: TaskTemplateFormValues,
 ): Promise<{ success: boolean; data?: TaskTemplate; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   const parsed = templateSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
@@ -740,6 +770,9 @@ export async function updateTaskTemplate(
 export async function deleteTaskTemplate(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   try {
     const [template] = await db
       .select({ id: taskTemplates.id })
@@ -765,6 +798,9 @@ export async function deleteTaskTemplate(
 export async function reorderTaskTemplates(
   orderedIds: string[],
 ): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   try {
     await Promise.all(
       orderedIds.map((id, i) =>
@@ -781,6 +817,9 @@ export async function reorderTaskTemplates(
 export async function reorderTransactionTasks(
   orderedIds: string[],
 ): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   try {
     await Promise.all(
       orderedIds.map((id, i) =>
@@ -796,6 +835,9 @@ export async function reorderTransactionTasks(
 export async function toggleTaskTemplateActive(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   try {
     const [template] = await db
       .select({ isActive: taskTemplates.isActive })
