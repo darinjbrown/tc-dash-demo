@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { Plus, Search, SlidersHorizontal, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { canManageAll } from '@/lib/roles';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -32,6 +34,9 @@ const STATUS_OPTIONS = [
 ];
 
 export default function TransactionsPage() {
+  const { data: session } = useSession();
+  const role = (session?.user as { role?: string } | undefined)?.role;
+  const canEdit = !!role && canManageAll(role);
   const [groups, setGroups] = useState<AgentTransactionGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
@@ -120,10 +125,12 @@ export default function TransactionsPage() {
             </p>
           )}
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="size-4 mr-1.5" />
-          New Transaction
-        </Button>
+        {canEdit && (
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="size-4 mr-1.5" />
+            New Transaction
+          </Button>
+        )}
       </div>
 
       {/* ── Filters ──────────────────────────────────────── */}
@@ -233,10 +240,12 @@ export default function TransactionsPage() {
               <p className="text-sm text-muted-foreground mb-4">
                 Create your first transaction to get started.
               </p>
-              <Button onClick={() => setCreateOpen(true)}>
-                <Plus className="size-4 mr-1.5" />
-                New Transaction
-              </Button>
+              {canEdit && (
+                <Button onClick={() => setCreateOpen(true)}>
+                  <Plus className="size-4 mr-1.5" />
+                  New Transaction
+                </Button>
+              )}
             </>
           ) : (
             <>
