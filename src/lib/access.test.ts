@@ -4,7 +4,13 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('@/lib/auth', () => ({ auth: vi.fn() }));
 vi.mock('@/db/client', () => ({ db: {} }));
 
-import { normalizeEmail, computeViewerScope, isReadOnlyRole } from '@/lib/access';
+import {
+  normalizeEmail,
+  computeViewerScope,
+  isReadOnlyRole,
+  canManageAll,
+  transactionScopeCondition,
+} from '@/lib/access';
 
 describe('normalizeEmail', () => {
   it('lowercases and trims', () => {
@@ -30,12 +36,42 @@ describe('computeViewerScope', () => {
       expect(computeViewerScope({ role, userId: 'u1', matchedAgentIds: [] }).agentIds).toBeNull();
     }
   });
+  it('an unknown role is fail-closed (restricted, never null)', () => {
+    const scope = computeViewerScope({ role: 'superadmin', userId: 'u1', matchedAgentIds: [] });
+    expect(scope.agentIds).toEqual([]);
+  });
+});
+
+describe('canManageAll', () => {
+  it('is an allowlist of privileged roles', () => {
+    expect(canManageAll('admin')).toBe(true);
+    expect(canManageAll('broker')).toBe(true);
+    expect(canManageAll('tc')).toBe(true);
+  });
+  it('denies agent and unrecognized roles (fail-closed)', () => {
+    expect(canManageAll('agent')).toBe(false);
+    expect(canManageAll('superadmin')).toBe(false);
+    expect(canManageAll('')).toBe(false);
+  });
 });
 
 describe('isReadOnlyRole', () => {
-  it('only agent is read-only', () => {
+  it('is the complement of canManageAll', () => {
     expect(isReadOnlyRole('agent')).toBe(true);
+    expect(isReadOnlyRole('superadmin')).toBe(true);
     expect(isReadOnlyRole('admin')).toBe(false);
     expect(isReadOnlyRole('tc')).toBe(false);
+  });
+});
+
+describe('transactionScopeCondition', () => {
+  it('returns undefined (no filter) only for unrestricted viewers', () => {
+    expect(
+      transactionScopeCondition({ role: 'admin', userId: 'u1', agentIds: null }),
+    ).toBeUndefined();
+  });
+  it('returns a real condition (NOT undefined) for a no-match agent — must see nothing', () => {
+    const cond = transactionScopeCondition({ role: 'agent', userId: 'u1', agentIds: [] });
+    expect(cond).toBeDefined();
   });
 });

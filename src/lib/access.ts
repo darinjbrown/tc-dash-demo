@@ -15,8 +15,18 @@ export function normalizeEmail(email: string | null | undefined): string {
   return (email ?? '').trim().toLowerCase();
 }
 
+// Roles permitted to see all data and perform writes. Anything NOT in this set
+// (the `agent` role, or any unrecognized/garbage role) is treated as a
+// restricted, read-only viewer. Allowlist, not denylist, so unknown roles are
+// fail-closed on BOTH the read and write paths.
+const PRIVILEGED_ROLES = new Set(['admin', 'broker', 'tc']);
+
+export function canManageAll(role: string): boolean {
+  return PRIVILEGED_ROLES.has(role);
+}
+
 export function isReadOnlyRole(role: string): boolean {
-  return role === 'agent';
+  return !canManageAll(role);
 }
 
 export function computeViewerScope(input: {
@@ -24,10 +34,10 @@ export function computeViewerScope(input: {
   userId: string | null;
   matchedAgentIds: string[];
 }): ViewerScope {
-  if (isReadOnlyRole(input.role)) {
-    return { userId: input.userId, role: input.role, agentIds: input.matchedAgentIds };
+  if (canManageAll(input.role)) {
+    return { userId: input.userId, role: input.role, agentIds: null };
   }
-  return { userId: input.userId, role: input.role, agentIds: null };
+  return { userId: input.userId, role: input.role, agentIds: input.matchedAgentIds };
 }
 
 /**
@@ -43,6 +53,9 @@ export async function getViewerScope(): Promise<ViewerScope> {
 
   let matchedAgentIds: string[] = [];
   if (isReadOnlyRole(role) && email) {
+    // Assumes email is effectively unique in `agents` (no DB UNIQUE constraint
+    // today). Duplicates would broaden this viewer's scope, never narrow it.
+    // Revisit when switching to an explicit users.id -> agents.userId link.
     const rows = await db
       .select({ id: agents.id })
       .from(agents)
