@@ -216,7 +216,7 @@ export function TaskItem({ task, onMoveUp, onMoveDown, canEdit = false }: TaskIt
             <p className="text-sm text-muted-foreground">{task.description}</p>
           )}
 
-          {canEdit && (
+          {canEdit ? (
             <div className="space-y-1.5">
               <Label className="text-xs">Notes</Label>
               <Textarea
@@ -227,6 +227,14 @@ export function TaskItem({ task, onMoveUp, onMoveDown, canEdit = false }: TaskIt
                 className="text-sm"
               />
             </div>
+          ) : (
+            notes && (
+              // Read-only viewers still see notes a TC added, just can't edit them.
+              <div className="space-y-1.5">
+                <Label className="text-xs">Notes</Label>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{notes}</p>
+              </div>
+            )
           )}
 
           {canEdit && !isTerminal && (

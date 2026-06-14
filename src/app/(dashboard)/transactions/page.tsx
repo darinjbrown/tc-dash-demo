@@ -35,7 +35,7 @@ const STATUS_OPTIONS = [
 
 export default function TransactionsPage() {
   const { data: session } = useSession();
-  const role = (session?.user as { role?: string } | undefined)?.role;
+  const role = session?.user?.role;
   const canEdit = !!role && canManageAll(role);
   const [groups, setGroups] = useState<AgentTransactionGroup[]>([]);
   const [loading, setLoading] = useState(true);

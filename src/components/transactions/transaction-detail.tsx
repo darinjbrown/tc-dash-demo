@@ -223,7 +223,7 @@ interface TransactionDetailProps {
 export function TransactionDetail({ transaction: tx }: TransactionDetailProps) {
   const router = useRouter();
   const { data: session } = useSession();
-  const role = (session?.user as { role?: string } | undefined)?.role;
+  const role = session?.user?.role;
   const canEdit = !!role && canManageAll(role);
   const [editOpen, setEditOpen] = useState(false);
   const [isPending, startTransition] = useTransition();

@@ -60,7 +60,7 @@ export function AppSidebar() {
   }, []);
 
   const isAdmin = session?.user?.role === 'admin';
-  const role = (session?.user as { role?: string } | undefined)?.role;
+  const role = session?.user?.role;
   const canManage = !!role && canManageAll(role);
   const visibleNav = canManage
     ? NAV_ITEMS
