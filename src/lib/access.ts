@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { auth } from '@/lib/auth';
 import { db } from '@/db/client';
 import { agents, transactions, transactionAgents } from '@/db/schema';
@@ -43,8 +44,11 @@ export function computeViewerScope(input: {
 /**
  * Resolve the current viewer's scope. Email-match is isolated HERE only —
  * swap to an explicit users.id -> agents.userId link later without touching callers.
+ *
+ * Wrapped in React `cache()` so multiple reads in one server render (e.g. the
+ * dashboard's five scope-dependent queries) share a single auth() + agents lookup.
  */
-export async function getViewerScope(): Promise<ViewerScope> {
+export const getViewerScope = cache(async (): Promise<ViewerScope> => {
   const session = await auth();
   // Default to the most restricted role when unknown (fail-closed).
   const role = (session?.user as { role?: string } | undefined)?.role ?? 'agent';
@@ -64,7 +68,7 @@ export async function getViewerScope(): Promise<ViewerScope> {
   }
 
   return computeViewerScope({ role, userId, matchedAgentIds });
-}
+});
 
 /**
  * Guard for mutations. Returns the standard error object when the viewer is an
