@@ -2,8 +2,9 @@
 
 import { db } from '@/db/client';
 import { transactionAgents, agents } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { getViewerScope, requireWriteAccess } from '@/lib/access';
 
 export type TransactionAgentEntry = {
   id: string;
@@ -22,6 +23,24 @@ export async function getTransactionAgents(transactionId: string): Promise<{
   listing: TransactionAgentEntry[];
   buyer: TransactionAgentEntry[];
 }> {
+  // Restricted viewers may only see the agent roster of a transaction they are
+  // on. Fail-closed: an out-of-scope (or no-match) agent gets an empty roster.
+  const scope = await getViewerScope();
+  if (scope.agentIds !== null) {
+    if (scope.agentIds.length === 0) return { listing: [], buyer: [] };
+    const onTx = await db
+      .select({ id: transactionAgents.id })
+      .from(transactionAgents)
+      .where(
+        and(
+          eq(transactionAgents.transactionId, transactionId),
+          inArray(transactionAgents.agentId, scope.agentIds),
+        ),
+      )
+      .limit(1);
+    if (onTx.length === 0) return { listing: [], buyer: [] };
+  }
+
   const rows = await db
     .select({
       id: transactionAgents.id,
@@ -56,6 +75,9 @@ export async function addTransactionAgent(
   side: 'listing' | 'buyer',
   isPrimary: boolean,
 ): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   try {
     const existing = await db
       .select({ id: transactionAgents.id })
@@ -108,6 +130,9 @@ export async function removeTransactionAgent(
   agentId: string,
   side: 'listing' | 'buyer',
 ): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   try {
     await db
       .delete(transactionAgents)
@@ -133,6 +158,9 @@ export async function setTransactionAgentPrimary(
   agentId: string,
   side: 'listing' | 'buyer',
 ): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   try {
     await db
       .update(transactionAgents)
