@@ -29,6 +29,7 @@ import {
 } from 'drizzle-orm';
 import { format, addDays } from 'date-fns';
 import { revalidatePath } from 'next/cache';
+import { getViewerScope, transactionScopeCondition } from '@/lib/access';
 import { z } from 'zod';
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
@@ -70,6 +71,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const weekEnd = daysFromNowStr(7);
   const next30 = daysFromNowStr(30);
 
+  const scope = await getViewerScope();
+  const txScope = transactionScopeCondition(scope);
+
   const [dueTodayResult, dueWeekResult, overdueResult, closingResult] = await Promise.all([
     db
       .select({ count: count() })
@@ -80,6 +84,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
           eq(transactionTasks.dueDate, today),
           notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
           notInArray(transactions.status, ['closed', 'cancelled']),
+          txScope,
         ),
       ),
 
@@ -94,6 +99,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
           lte(transactionTasks.dueDate, weekEnd),
           notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
           notInArray(transactions.status, ['closed', 'cancelled']),
+          txScope,
         ),
       ),
 
@@ -115,6 +121,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
               notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
             ),
           ),
+          txScope,
         ),
       ),
 
@@ -127,6 +134,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
           gte(transactions.expectedCloseDate, today),
           lte(transactions.expectedCloseDate, next30),
           notInArray(transactions.status, ['closed', 'cancelled']),
+          txScope,
         ),
       ),
   ]);
@@ -144,6 +152,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 export async function getUpcomingTasks(days = 7): Promise<TaskWithTransaction[]> {
   const today = todayStr();
   const end = daysFromNowStr(days);
+  const txScope = transactionScopeCondition(await getViewerScope());
 
   const rows = await db
     .select({
@@ -172,6 +181,7 @@ export async function getUpcomingTasks(days = 7): Promise<TaskWithTransaction[]>
         lte(transactionTasks.dueDate, end),
         notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
         notInArray(transactions.status, ['closed', 'cancelled']),
+        txScope,
       ),
     )
     .orderBy(asc(transactionTasks.dueDate));
@@ -183,6 +193,7 @@ export async function getUpcomingTasks(days = 7): Promise<TaskWithTransaction[]>
 
 export async function getOverdueTasks(): Promise<TaskWithTransaction[]> {
   const today = todayStr();
+  const txScope = transactionScopeCondition(await getViewerScope());
 
   const rows = await db
     .select({
@@ -218,6 +229,7 @@ export async function getOverdueTasks(): Promise<TaskWithTransaction[]> {
             notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
           ),
         ),
+        txScope,
       ),
     )
     .orderBy(asc(transactionTasks.dueDate));
@@ -229,6 +241,7 @@ export async function getOverdueTasks(): Promise<TaskWithTransaction[]> {
 
 export async function getUpcomingDeadlines(limit = 10): Promise<TaskWithTransaction[]> {
   const today = todayStr();
+  const txScope = transactionScopeCondition(await getViewerScope());
 
   const rows = await db
     .select({
@@ -256,6 +269,7 @@ export async function getUpcomingDeadlines(limit = 10): Promise<TaskWithTransact
         gte(transactionTasks.dueDate, today),
         notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
         notInArray(transactions.status, ['closed', 'cancelled']),
+        txScope,
       ),
     )
     .orderBy(asc(transactionTasks.dueDate))
