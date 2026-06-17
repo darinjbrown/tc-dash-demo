@@ -5,6 +5,7 @@ import { users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
+import { requireWriteAccess } from '@/lib/access';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { userSchema } from '@/lib/user-schema';
@@ -31,6 +32,8 @@ export type PasswordFormValues = z.infer<typeof passwordSchema>;
 export async function updateProfile(
   data: ProfileFormValues,
 ): Promise<{ success: boolean; error?: string }> {
+  // Self-service: any authenticated user (including read-only agents) may edit
+  // their own profile. Gated by the session check below, not requireWriteAccess.
   const parsed = profileSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
@@ -55,6 +58,8 @@ export async function updateProfile(
 export async function changePassword(
   data: PasswordFormValues,
 ): Promise<{ success: boolean; error?: string }> {
+  // Self-service: any authenticated user (including read-only agents) may change
+  // their own password. Gated by the session check below, not requireWriteAccess.
   const parsed = passwordSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
@@ -125,6 +130,9 @@ export async function listUsers(): Promise<
 export async function createUser(
   data: UserFormValues,
 ): Promise<{ success: boolean; tempPassword?: string; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   const session = await requireAdmin();
   if (!session) return { success: false, error: 'Unauthorized' };
 
@@ -160,6 +168,9 @@ export async function updateUser(
   id: string,
   data: UserFormValues,
 ): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   const session = await requireAdmin();
   if (!session) return { success: false, error: 'Unauthorized' };
 
@@ -186,6 +197,9 @@ export async function updateUser(
 }
 
 export async function deleteUser(id: string): Promise<{ success: boolean; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   const session = await requireAdmin();
   if (!session) return { success: false, error: 'Unauthorized' };
 
@@ -203,6 +217,9 @@ export async function deleteUser(id: string): Promise<{ success: boolean; error?
 export async function resetUserPassword(
   id: string,
 ): Promise<{ success: boolean; tempPassword?: string; error?: string }> {
+  const denied = await requireWriteAccess();
+  if (denied) return denied;
+
   const session = await requireAdmin();
   if (!session) return { success: false, error: 'Unauthorized' };
 

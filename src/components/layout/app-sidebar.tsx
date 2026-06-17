@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { useSession } from 'next-auth/react';
 import { useBrandContext } from '@/components/providers/theme-provider';
+import { canManageAll } from '@/lib/roles';
 import {
   Sidebar,
   SidebarContent,
@@ -59,6 +60,11 @@ export function AppSidebar() {
   }, []);
 
   const isAdmin = session?.user?.role === 'admin';
+  const role = session?.user?.role;
+  const canManage = !!role && canManageAll(role);
+  const visibleNav = canManage
+    ? NAV_ITEMS
+    : NAV_ITEMS.filter((i) => i.href === '/dashboard' || i.href === '/transactions');
   const userName = session?.user?.name ?? 'User';
   const userEmail = session?.user?.email ?? '';
   const initials = userName
@@ -105,7 +111,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {[...NAV_ITEMS, ...(isAdmin ? ADMIN_NAV_ITEMS : [])].map(({ href, label, icon: Icon }) => (
+              {[...visibleNav, ...(isAdmin ? ADMIN_NAV_ITEMS : [])].map(({ href, label, icon: Icon }) => (
                 <SidebarMenuItem key={href}>
                   <SidebarMenuButton asChild isActive={isActive(href)} tooltip={label}>
                     <Link href={href}>

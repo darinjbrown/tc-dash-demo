@@ -3,7 +3,9 @@
 import { useState, useTransition, useRef, useEffect } from 'react';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
+import { canManageAll } from '@/lib/roles';
 import {
   Edit2,
   Archive,
@@ -120,10 +122,12 @@ function AgentCard({
   agent,
   onRemove,
   onSetPrimary,
+  canEdit,
 }: {
   agent: TransactionAgentEntry;
   onRemove: (agentId: string) => void;
   onSetPrimary: (agentId: string) => void;
+  canEdit: boolean;
 }) {
   return (
     <div className="flex flex-col gap-1 p-3 rounded-md border bg-card text-sm">
@@ -135,7 +139,7 @@ function AgentCard({
           {agent.isPrimary && (
             <Badge className="text-[10px] px-1.5 py-0 h-4">Primary</Badge>
           )}
-          {!agent.isPrimary && (
+          {canEdit && !agent.isPrimary && (
             <button
               type="button"
               className="text-xs text-muted-foreground hover:text-foreground underline"
@@ -144,14 +148,16 @@ function AgentCard({
               Set primary
             </button>
           )}
-          <button
-            type="button"
-            className="text-muted-foreground hover:text-destructive transition-colors ml-1"
-            onClick={() => onRemove(agent.agentId)}
-            aria-label="Remove agent"
-          >
-            <X className="size-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              className="text-muted-foreground hover:text-destructive transition-colors ml-1"
+              onClick={() => onRemove(agent.agentId)}
+              aria-label="Remove agent"
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
         </div>
       </div>
       {agent.broker && <div className="text-xs text-muted-foreground">{agent.broker}</div>}
@@ -216,6 +222,9 @@ interface TransactionDetailProps {
 
 export function TransactionDetail({ transaction: tx }: TransactionDetailProps) {
   const router = useRouter();
+  const { data: session } = useSession();
+  const role = session?.user?.role;
+  const canEdit = !!role && canManageAll(role);
   const [editOpen, setEditOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [notes, setNotes] = useState(tx.notes ?? '');
@@ -530,36 +539,47 @@ export function TransactionDetail({ transaction: tx }: TransactionDetailProps) {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Status badge + dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={isPending}
-                  className={cn('gap-1.5 border font-normal', statusCfg.className)}
-                >
-                  {statusCfg.label}
-                  <span className="text-xs opacity-60">▾</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {ALL_STATUSES.map((s) => (
-                  <DropdownMenuItem
-                    key={s}
-                    onClick={() => handleStatusChange(s)}
-                    className={cn(tx.status === s && 'font-semibold')}
+            {/* Status badge + dropdown — write control gated for agents */}
+            {canEdit ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isPending}
+                    className={cn('gap-1.5 border font-normal', statusCfg.className)}
                   >
-                    {STATUS_CONFIG[s]?.label ?? s}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                    {statusCfg.label}
+                    <span className="text-xs opacity-60">▾</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {ALL_STATUSES.map((s) => (
+                    <DropdownMenuItem
+                      key={s}
+                      onClick={() => handleStatusChange(s)}
+                      className={cn(tx.status === s && 'font-semibold')}
+                    >
+                      {STATUS_CONFIG[s]?.label ?? s}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Badge
+                variant="outline"
+                className={cn('border font-normal', statusCfg.className)}
+              >
+                {statusCfg.label}
+              </Badge>
+            )}
 
-            <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
-              <Edit2 className="size-4 mr-1.5" />
-              Edit Details
-            </Button>
+            {canEdit && (
+              <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+                <Edit2 className="size-4 mr-1.5" />
+                Edit Details
+              </Button>
+            )}
 
             <Button
               size="sm"
@@ -570,16 +590,18 @@ export function TransactionDetail({ transaction: tx }: TransactionDetailProps) {
               Print
             </Button>
 
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-muted-foreground"
-              onClick={handleArchive}
-              disabled={isPending}
-            >
-              <Archive className="size-4 mr-1.5" />
-              Archive
-            </Button>
+            {canEdit && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-muted-foreground"
+                onClick={handleArchive}
+                disabled={isPending}
+              >
+                <Archive className="size-4 mr-1.5" />
+                Archive
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -701,14 +723,16 @@ export function TransactionDetail({ transaction: tx }: TransactionDetailProps) {
                     <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                       Listing Agents
                     </h4>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 text-xs gap-1 px-2"
-                      onClick={() => setPickerOpen('listing')}
-                    >
-                      <Plus className="size-3" /> Add
-                    </Button>
+                    {canEdit && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 text-xs gap-1 px-2"
+                        onClick={() => setPickerOpen('listing')}
+                      >
+                        <Plus className="size-3" /> Add
+                      </Button>
+                    )}
                   </div>
                   <div className="space-y-2">
                     {listingAgents.map((a) => (
@@ -717,6 +741,7 @@ export function TransactionDetail({ transaction: tx }: TransactionDetailProps) {
                         agent={a}
                         onRemove={(id) => handleRemoveAgent(id, 'listing')}
                         onSetPrimary={(id) => handleSetPrimary(id, 'listing')}
+                        canEdit={canEdit}
                       />
                     ))}
                     {listingAgents.length === 0 && (
@@ -731,14 +756,16 @@ export function TransactionDetail({ transaction: tx }: TransactionDetailProps) {
                     <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                       Buyer&apos;s Agents
                     </h4>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 text-xs gap-1 px-2"
-                      onClick={() => setPickerOpen('buyer')}
-                    >
-                      <Plus className="size-3" /> Add
-                    </Button>
+                    {canEdit && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 text-xs gap-1 px-2"
+                        onClick={() => setPickerOpen('buyer')}
+                      >
+                        <Plus className="size-3" /> Add
+                      </Button>
+                    )}
                   </div>
                   <div className="space-y-2">
                     {buyerAgents.map((a) => (
@@ -747,6 +774,7 @@ export function TransactionDetail({ transaction: tx }: TransactionDetailProps) {
                         agent={a}
                         onRemove={(id) => handleRemoveAgent(id, 'buyer')}
                         onSetPrimary={(id) => handleSetPrimary(id, 'buyer')}
+                        canEdit={canEdit}
                       />
                     ))}
                     {buyerAgents.length === 0 && (
@@ -791,14 +819,22 @@ export function TransactionDetail({ transaction: tx }: TransactionDetailProps) {
               {/* Notes */}
               <div className="rounded-lg border p-4">
                 <h3 className="text-sm font-semibold mb-3">Notes</h3>
-                <Textarea
-                  value={notes}
-                  onChange={(e) => handleNotesChange(e.target.value)}
-                  rows={6}
-                  placeholder="Internal notes about this transaction (auto-saves)..."
-                  className="text-sm"
-                />
-                <p className="text-xs text-muted-foreground mt-1.5">Auto-saves as you type</p>
+                {canEdit ? (
+                  <>
+                    <Textarea
+                      value={notes}
+                      onChange={(e) => handleNotesChange(e.target.value)}
+                      rows={6}
+                      placeholder="Internal notes about this transaction (auto-saves)..."
+                      className="text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1.5">Auto-saves as you type</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                    {notes || 'No notes.'}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -806,7 +842,7 @@ export function TransactionDetail({ transaction: tx }: TransactionDetailProps) {
 
         {/* ── Tasks tab ──────────────────────────────────── */}
         <TabsContent value="tasks">
-          <TaskChecklist tasks={tx.tasks} transactionId={tx.id} />
+          <TaskChecklist tasks={tx.tasks} transactionId={tx.id} canEdit={canEdit} />
         </TabsContent>
 
         {/* ── Activity tab ───────────────────────────────── */}

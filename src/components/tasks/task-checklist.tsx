@@ -38,9 +38,10 @@ const CATEGORY_ORDER = [
 interface TaskChecklistProps {
   tasks: TransactionTask[];
   transactionId: string;
+  canEdit?: boolean;
 }
 
-export function TaskChecklist({ tasks, transactionId }: TaskChecklistProps) {
+export function TaskChecklist({ tasks, transactionId, canEdit = false }: TaskChecklistProps) {
   const [addTaskOpen, setAddTaskOpen] = useState(false);
   const [localTasks, setLocalTasks] = useState<TransactionTask[]>(tasks);
 
@@ -98,10 +99,12 @@ export function TaskChecklist({ tasks, transactionId }: TaskChecklistProps) {
           </div>
           <Progress value={progressPct} className="h-2" />
         </div>
-        <Button size="sm" variant="outline" onClick={() => setAddTaskOpen(true)}>
-          <Plus className="size-4 mr-1.5" />
-          Add Task
-        </Button>
+        {canEdit && (
+          <Button size="sm" variant="outline" onClick={() => setAddTaskOpen(true)}>
+            <Plus className="size-4 mr-1.5" />
+            Add Task
+          </Button>
+        )}
       </div>
 
       {/* Task groups */}
@@ -132,8 +135,9 @@ export function TaskChecklist({ tasks, transactionId }: TaskChecklistProps) {
                     <TaskItem
                       key={task.id}
                       task={task}
-                      onMoveUp={idx > 0 ? () => moveTask(category, task.id, 'up') : undefined}
-                      onMoveDown={idx < categoryTasks.length - 1 ? () => moveTask(category, task.id, 'down') : undefined}
+                      onMoveUp={canEdit && idx > 0 ? () => moveTask(category, task.id, 'up') : undefined}
+                      onMoveDown={canEdit && idx < categoryTasks.length - 1 ? () => moveTask(category, task.id, 'down') : undefined}
+                      canEdit={canEdit}
                     />
                   ))}
                 </div>

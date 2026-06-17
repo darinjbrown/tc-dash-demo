@@ -55,9 +55,10 @@ interface TaskItemProps {
   task: TransactionTask;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
+  canEdit?: boolean;
 }
 
-export function TaskItem({ task, onMoveUp, onMoveDown }: TaskItemProps) {
+export function TaskItem({ task, onMoveUp, onMoveDown, canEdit = false }: TaskItemProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [notes, setNotes] = useState(task.notes ?? '');
   const [snoozeDate, setSnoozeDate] = useState('');
@@ -117,17 +118,17 @@ export function TaskItem({ task, onMoveUp, onMoveDown }: TaskItemProps) {
             className="mt-0.5 shrink-0"
             onClick={(e) => {
               e.stopPropagation();
-              if (!isTerminal) handleStatusChange('completed');
+              if (canEdit && !isTerminal) handleStatusChange('completed');
             }}
-            disabled={isPending || isTerminal}
-            title={isTerminal ? task.status : 'Mark complete'}
+            disabled={isPending || isTerminal || !canEdit}
+            title={isTerminal ? task.status : canEdit ? 'Mark complete' : undefined}
           >
             {task.status === 'completed' ? (
               <CheckCircle2 className="size-4 text-green-600" />
             ) : task.status === 'waived' || task.status === 'not_applicable' ? (
               <MinusCircle className="size-4 text-muted-foreground" />
             ) : (
-              <Circle className="size-4 text-muted-foreground hover:text-primary transition-colors" />
+              <Circle className={cn('size-4 text-muted-foreground', canEdit && 'hover:text-primary transition-colors')} />
             )}
           </button>
 
@@ -215,18 +216,28 @@ export function TaskItem({ task, onMoveUp, onMoveDown }: TaskItemProps) {
             <p className="text-sm text-muted-foreground">{task.description}</p>
           )}
 
-          <div className="space-y-1.5">
-            <Label className="text-xs">Notes</Label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              placeholder="Add notes..."
-              className="text-sm"
-            />
-          </div>
+          {canEdit ? (
+            <div className="space-y-1.5">
+              <Label className="text-xs">Notes</Label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                placeholder="Add notes..."
+                className="text-sm"
+              />
+            </div>
+          ) : (
+            notes && (
+              // Read-only viewers still see notes a TC added, just can't edit them.
+              <div className="space-y-1.5">
+                <Label className="text-xs">Notes</Label>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{notes}</p>
+              </div>
+            )
+          )}
 
-          {!isTerminal && (
+          {canEdit && !isTerminal && (
             <div className="space-y-1.5">
               <Label className="text-xs flex items-center gap-1">
                 <CalendarClock className="size-3" />
@@ -251,7 +262,7 @@ export function TaskItem({ task, onMoveUp, onMoveDown }: TaskItemProps) {
             </div>
           )}
 
-          {!isTerminal && (
+          {canEdit && !isTerminal && (
             <div className="flex flex-wrap gap-2 pt-1">
               <Button
                 size="sm"

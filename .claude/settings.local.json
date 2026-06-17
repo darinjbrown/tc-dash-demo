@@ -24,7 +24,11 @@
       "Bash(git commit *)",
       "Bash(npx tsc *)",
       "Bash(git stash *)",
-      "Bash(npx drizzle-kit *)"
+      "Bash(npx drizzle-kit *)",
+      "Bash(git push *)",
+      "Bash(git fetch *)",
+      "Bash(git merge *)",
+      "Bash(git rm *)"
     ],
     "additionalDirectories": [
       "c:\\tmp\\brainstorm\\content",

@@ -1,5 +1,11 @@
-import { auth } from '@/lib/auth';
+import NextAuth from 'next-auth';
 import { NextResponse } from 'next/server';
+import { authConfig } from '@/lib/auth.config';
+import { isForbiddenForRole } from '@/lib/roles';
+
+// Edge-safe instance: built from authConfig only, so no Node-only code
+// (bcrypt / Drizzle adapter) is pulled into the Edge proxy bundle.
+const { auth } = NextAuth(authConfig);
 
 export default auth((req) => {
   const { nextUrl } = req;
@@ -16,6 +22,13 @@ export default auth((req) => {
 
   // Redirect authenticated users away from login
   if (isAuthenticated && nextUrl.pathname === '/login') {
+    return NextResponse.redirect(new URL('/dashboard', nextUrl.origin));
+  }
+
+  // Block read-only viewers from admin-only routes. Fail-closed: a missing role
+  // on an authenticated session is treated as the most restricted ('agent').
+  const role = (req.auth?.user as { role?: string } | undefined)?.role ?? 'agent';
+  if (isAuthenticated && isForbiddenForRole(nextUrl.pathname, role)) {
     return NextResponse.redirect(new URL('/dashboard', nextUrl.origin));
   }
 
