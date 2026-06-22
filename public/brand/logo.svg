@@ -1,6 +1,7 @@
-<svg width="160" height="40" viewBox="0 0 160 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="36" height="36" x="2" y="2" rx="6" fill="hsl(222.2 47.4% 31.2%)"/>
-  <text x="19" y="26" font-family="system-ui, sans-serif" font-size="18" font-weight="700" fill="white" text-anchor="middle">TC</text>
-  <text x="52" y="16" font-family="system-ui, sans-serif" font-size="13" font-weight="700" fill="currentColor">TC Dashboard</text>
-  <text x="52" y="30" font-family="system-ui, sans-serif" font-size="9" fill="currentColor" opacity="0.6">Transaction Management</text>
+<svg width="200" height="40" viewBox="0 0 200 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Neutral placeholder wordmark for the Crestline Realty product demo (fictional brand). -->
+  <rect x="2" y="2" width="36" height="36" rx="6" fill="hsl(222.2 47.4% 31.2%)"/>
+  <text x="20" y="26" font-family="system-ui, sans-serif" font-size="16" font-weight="700" fill="white" text-anchor="middle">CR</text>
+  <text x="50" y="18" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="currentColor">Crestline Realty</text>
+  <text x="50" y="31" font-family="system-ui, sans-serif" font-size="9" fill="currentColor" opacity="0.6">Transaction Management</text>
 </svg>

@@ -38,10 +38,10 @@ export interface BrandConfig {
 
 // DEFAULT BRAND — replace this object to rebrand the entire app
 export const defaultBrand: BrandConfig = {
-  name: 'Bertolone Realty',
+  name: 'Crestline Realty',
   tagline: 'Transaction Management',
-  logo: '/bertoloneLogo.png',
-  logoIcon: '/bertoloneLogo.png',
+  logo: '/brand/logo.svg',
+  logoIcon: '/brand/icon.svg',
   colors: {
     background: '0 0% 100%',
     foreground: '222.2 84% 4.9%',

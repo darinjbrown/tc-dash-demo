@@ -309,7 +309,7 @@ activeBrand (BrandConfig)
 - `borderRadius` — applied to `--radius` CSS variable
 - `fontFamily` — optional font override
 
-**To rebrand:** change the `activeBrand` export in `brand-config.ts`. Two brand configs are included: `defaultBrand` (Bertolone Realty, navy) and `premiereBrand` (Premiere Realty TC, gold/charcoal).
+**To rebrand:** change the `activeBrand` export in `brand-config.ts`. Two brand configs are included: `defaultBrand` (Crestline Realty, navy) and `premiereBrand` (Premiere Realty TC, gold/charcoal).
 
 **BrandContext** is exposed via `useBrandContext()` for components that need to read brand values at runtime (e.g. sidebar logo, page titles).
 

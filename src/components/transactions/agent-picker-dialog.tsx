@@ -223,7 +223,7 @@ export function AgentPickerDialog({
                   onCheckedChange={(v) => setNewAgent((p) => ({ ...p, isInHouse: !!v }))}
                 />
                 <Label htmlFor="newIsInHouse" className="text-sm font-normal cursor-pointer">
-                  In-House Agent (Bertolone Realty)
+                  In-House Agent (Crestline Realty)
                 </Label>
               </div>
             </div>
