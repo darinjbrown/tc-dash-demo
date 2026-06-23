@@ -3,9 +3,9 @@
 import { db } from '@/db/client';
 import { agents, transactionAgents } from '@/db/schema';
 import type { Agent } from '@/db/schema';
-import { eq, asc, sql } from 'drizzle-orm';
+import { eq, and, asc, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
-import { requireWriteAccess } from '@/lib/access';
+import { getViewerScope, requireWriteAccess, requireTenantWrite, tenantScopeCondition } from '@/lib/access';
 import { z } from 'zod';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -36,9 +36,11 @@ const agentSchema = z.object({
 // ─── Queries ──────────────────────────────────────────────────────────────────
 
 export async function getAgents(): Promise<AgentWithStats[]> {
+  const scope = await getViewerScope();
   const rows = await db
     .select({
       id: agents.id,
+      tenantId: agents.tenantId,
       name: agents.name,
       email: agents.email,
       phone: agents.phone,
@@ -53,6 +55,7 @@ export async function getAgents(): Promise<AgentWithStats[]> {
     })
     .from(agents)
     .leftJoin(transactionAgents, eq(transactionAgents.agentId, agents.id))
+    .where(tenantScopeCondition(scope, agents.tenantId))
     .groupBy(agents.id)
     .orderBy(asc(agents.name));
 
@@ -67,6 +70,7 @@ export async function getAgentsForSelect(): Promise<{
   phone: string | null;
   isInHouse: boolean;
 }[]> {
+  const scope = await getViewerScope();
   const rows = await db
     .select({
       id: agents.id,
@@ -77,7 +81,7 @@ export async function getAgentsForSelect(): Promise<{
       isInHouse: agents.isInHouse,
     })
     .from(agents)
-    .where(eq(agents.isActive, true))
+    .where(and(eq(agents.isActive, true), tenantScopeCondition(scope, agents.tenantId)))
     .orderBy(asc(agents.name));
   return rows.map((r) => ({ ...r, isInHouse: r.isInHouse ?? false }));
 }
@@ -87,8 +91,8 @@ export async function getAgentsForSelect(): Promise<{
 export async function createAgent(
   data: AgentFormValues,
 ): Promise<{ success: boolean; data?: { id: string; name: string; broker: string | null; email: string; phone: string | null }; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
 
   const parsed = agentSchema.safeParse(data);
   if (!parsed.success) {
@@ -100,6 +104,7 @@ export async function createAgent(
   try {
     await db.insert(agents).values({
       id,
+      tenantId: tenant.tenantId, // stamped from session, never client input
       name: v.name,
       email: v.email,
       phone: v.phone?.trim() || null,
@@ -120,8 +125,8 @@ export async function updateAgent(
   id: string,
   data: AgentFormValues,
 ): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
 
   const parsed = agentSchema.safeParse(data);
   if (!parsed.success) {
@@ -142,7 +147,8 @@ export async function updateAgent(
         isInHouse: v.isInHouse ?? false,
         updatedAt: new Date(),
       })
-      .where(eq(agents.id, id));
+      // tenant-scoped WHERE: a forged id from another office updates 0 rows
+      .where(and(eq(agents.id, id), eq(agents.tenantId, tenant.tenantId)));
     revalidatePath('/agents');
     return { success: true };
   } catch (err) {
@@ -154,21 +160,21 @@ export async function updateAgent(
 export async function deleteAgent(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
 
   try {
     const linked = await db
       .select({ id: transactionAgents.id })
       .from(transactionAgents)
-      .where(eq(transactionAgents.agentId, id))
+      .where(and(eq(transactionAgents.agentId, id), eq(transactionAgents.tenantId, tenant.tenantId)))
       .limit(1);
 
     if (linked.length > 0) {
       return { success: false, error: 'Agent has linked transactions. Deactivate instead.' };
     }
 
-    await db.delete(agents).where(eq(agents.id, id));
+    await db.delete(agents).where(and(eq(agents.id, id), eq(agents.tenantId, tenant.tenantId)));
     revalidatePath('/agents');
     return { success: true };
   } catch (err) {
@@ -180,21 +186,21 @@ export async function deleteAgent(
 export async function toggleAgentActive(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
 
   try {
     const [agent] = await db
       .select({ isActive: agents.isActive })
       .from(agents)
-      .where(eq(agents.id, id));
+      .where(and(eq(agents.id, id), eq(agents.tenantId, tenant.tenantId)));
 
     if (!agent) return { success: false, error: 'Agent not found' };
 
     await db
       .update(agents)
       .set({ isActive: !agent.isActive, updatedAt: new Date() })
-      .where(eq(agents.id, id));
+      .where(and(eq(agents.id, id), eq(agents.tenantId, tenant.tenantId)));
 
     revalidatePath('/agents');
     return { success: true };
@@ -206,21 +212,21 @@ export async function toggleAgentActive(
 export async function toggleAgentInHouse(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
 
   try {
     const [agent] = await db
       .select({ isInHouse: agents.isInHouse })
       .from(agents)
-      .where(eq(agents.id, id));
+      .where(and(eq(agents.id, id), eq(agents.tenantId, tenant.tenantId)));
 
     if (!agent) return { success: false, error: 'Agent not found' };
 
     await db
       .update(agents)
       .set({ isInHouse: !agent.isInHouse, updatedAt: new Date() })
-      .where(eq(agents.id, id));
+      .where(and(eq(agents.id, id), eq(agents.tenantId, tenant.tenantId)));
 
     revalidatePath('/agents');
     revalidatePath('/transactions');

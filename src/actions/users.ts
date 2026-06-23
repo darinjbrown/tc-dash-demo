@@ -2,10 +2,10 @@
 
 import { db } from '@/db/client';
 import { users } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
-import { requireWriteAccess } from '@/lib/access';
+import { requireWriteAccess, getViewerScope } from '@/lib/access';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { userSchema } from '@/lib/user-schema';
@@ -97,10 +97,12 @@ export async function changePassword(
 
 // ─── Admin-only user management ───────────────────────────────────────────────
 
-async function requireAdmin() {
-  const session = await auth();
-  if (session?.user?.role !== 'admin') return null;
-  return session;
+// A *tenant* admin: role admin AND bound to a tenant. Platform admins do user
+// management via /platform, not these tenant-scoped actions.
+async function requireTenantAdmin(): Promise<{ userId: string; tenantId: string } | null> {
+  const scope = await getViewerScope();
+  if (scope.role !== 'admin' || !scope.tenantId || !scope.userId) return null;
+  return { userId: scope.userId, tenantId: scope.tenantId };
 }
 
 function generateTempPassword(): { tempPassword: string; hashedPassword: Promise<string> } {
@@ -112,8 +114,8 @@ function generateTempPassword(): { tempPassword: string; hashedPassword: Promise
 export async function listUsers(): Promise<
   Array<{ id: string; name: string | null; email: string; role: string; createdAt: Date | null }>
 > {
-  const session = await requireAdmin();
-  if (!session) return [];
+  const admin = await requireTenantAdmin();
+  if (!admin) return [];
 
   return db
     .select({
@@ -124,6 +126,7 @@ export async function listUsers(): Promise<
       createdAt: users.createdAt,
     })
     .from(users)
+    .where(eq(users.tenantId, admin.tenantId))
     .orderBy(users.createdAt);
 }
 
@@ -133,14 +136,15 @@ export async function createUser(
   const denied = await requireWriteAccess();
   if (denied) return denied;
 
-  const session = await requireAdmin();
-  if (!session) return { success: false, error: 'Unauthorized' };
+  const admin = await requireTenantAdmin();
+  if (!admin) return { success: false, error: 'Unauthorized' };
 
   const parsed = userSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
   }
 
+  // email is GLOBALLY unique — check across all tenants.
   const [existing] = await db
     .select({ id: users.id })
     .from(users)
@@ -155,6 +159,7 @@ export async function createUser(
       name: parsed.data.name,
       email: parsed.data.email,
       role: parsed.data.role,
+      tenantId: admin.tenantId, // new users join the creator's office
       hashedPassword: await hashedPassword,
     });
     revalidatePath('/settings');
@@ -171,16 +176,23 @@ export async function updateUser(
   const denied = await requireWriteAccess();
   if (denied) return denied;
 
-  const session = await requireAdmin();
-  if (!session) return { success: false, error: 'Unauthorized' };
+  const admin = await requireTenantAdmin();
+  if (!admin) return { success: false, error: 'Unauthorized' };
 
   const parsed = userSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
   }
 
+  // Target must be in the admin's tenant (forged id -> not found).
+  const [target] = await db
+    .select({ id: users.id, role: users.role })
+    .from(users)
+    .where(and(eq(users.id, id), eq(users.tenantId, admin.tenantId)));
+  if (!target) return { success: false, error: 'User not found' };
+
   // Prevent admin from changing their own role (lockout guard)
-  if (id === session.user.id && parsed.data.role !== session.user.role) {
+  if (id === admin.userId && parsed.data.role !== target.role) {
     return { success: false, error: 'You cannot change your own role' };
   }
 
@@ -188,7 +200,7 @@ export async function updateUser(
     await db
       .update(users)
       .set({ name: parsed.data.name, email: parsed.data.email, role: parsed.data.role })
-      .where(eq(users.id, id));
+      .where(and(eq(users.id, id), eq(users.tenantId, admin.tenantId)));
     revalidatePath('/settings');
     return { success: true };
   } catch {
@@ -200,13 +212,13 @@ export async function deleteUser(id: string): Promise<{ success: boolean; error?
   const denied = await requireWriteAccess();
   if (denied) return denied;
 
-  const session = await requireAdmin();
-  if (!session) return { success: false, error: 'Unauthorized' };
+  const admin = await requireTenantAdmin();
+  if (!admin) return { success: false, error: 'Unauthorized' };
 
-  if (id === session.user.id) return { success: false, error: 'You cannot delete yourself' };
+  if (id === admin.userId) return { success: false, error: 'You cannot delete yourself' };
 
   try {
-    await db.delete(users).where(eq(users.id, id));
+    await db.delete(users).where(and(eq(users.id, id), eq(users.tenantId, admin.tenantId)));
     revalidatePath('/settings');
     return { success: true };
   } catch {
@@ -220,13 +232,16 @@ export async function resetUserPassword(
   const denied = await requireWriteAccess();
   if (denied) return denied;
 
-  const session = await requireAdmin();
-  if (!session) return { success: false, error: 'Unauthorized' };
+  const admin = await requireTenantAdmin();
+  if (!admin) return { success: false, error: 'Unauthorized' };
 
   const { tempPassword, hashedPassword } = generateTempPassword();
 
   try {
-    await db.update(users).set({ hashedPassword: await hashedPassword }).where(eq(users.id, id));
+    await db
+      .update(users)
+      .set({ hashedPassword: await hashedPassword })
+      .where(and(eq(users.id, id), eq(users.tenantId, admin.tenantId)));
     return { success: true, tempPassword };
   } catch {
     return { success: false, error: 'Failed to reset password' };

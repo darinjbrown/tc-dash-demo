@@ -14,7 +14,7 @@ import type { Transaction, TransactionTask } from '@/db/schema';
 import { eq, count, sql, asc, desc, inArray, and, notInArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/lib/auth';
-import { getViewerScope, transactionScopeCondition, requireWriteAccess } from '@/lib/access';
+import { getViewerScope, transactionScopeCondition, tenantScopeCondition, requireTenantWrite } from '@/lib/access';
 import { stampTasks, recalculateTaskDueDates } from '@/lib/task-stamping';
 import { transactionSchema } from '@/lib/transaction-schema';
 import type { TransactionFormValues } from '@/lib/transaction-schema';
@@ -100,6 +100,7 @@ function dollars(v: string | undefined): number | null {
 // ─── Queries ──────────────────────────────────────────────────────────────────
 
 export async function getTransactions(): Promise<AgentTransactionGroup[]> {
+  const scope0 = await getViewerScope();
   const rows = await db
     .select({
       id: transactions.id,
@@ -122,7 +123,7 @@ export async function getTransactions(): Promise<AgentTransactionGroup[]> {
       buyerTcEmail: transactions.buyerTcEmail,
     })
     .from(transactions)
-    .where(transactionScopeCondition(await getViewerScope()))
+    .where(and(tenantScopeCondition(scope0, transactions.tenantId), transactionScopeCondition(scope0)))
     .orderBy(desc(transactions.createdAt));
 
   if (rows.length === 0) return [];
@@ -232,6 +233,7 @@ export type ActiveTransactionRow = {
 };
 
 export async function getActiveTransactionsList(): Promise<ActiveTransactionRow[]> {
+  const scope0 = await getViewerScope();
   const rows = await db
     .select({
       id: transactions.id,
@@ -242,7 +244,7 @@ export async function getActiveTransactionsList(): Promise<ActiveTransactionRow[
       expectedCloseDate: transactions.expectedCloseDate,
     })
     .from(transactions)
-    .where(and(inArray(transactions.status, ['listed', 'in_escrow']), transactionScopeCondition(await getViewerScope())))
+    .where(and(inArray(transactions.status, ['listed', 'in_escrow']), tenantScopeCondition(scope0, transactions.tenantId), transactionScopeCondition(scope0)))
     .orderBy(asc(transactions.expectedCloseDate));
 
   if (rows.length === 0) return [];
@@ -300,9 +302,11 @@ export async function getActiveTransactionsList(): Promise<ActiveTransactionRow[
 }
 
 export async function getTransactionById(id: string): Promise<TransactionDetail | null> {
+  const scopeById = await getViewerScope();
   const [txRow] = await db
     .select({
       id: transactions.id,
+      tenantId: transactions.tenantId,
       address: transactions.address,
       city: transactions.city,
       state: transactions.state,
@@ -351,7 +355,7 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
       updatedAt: transactions.updatedAt,
     })
     .from(transactions)
-    .where(and(eq(transactions.id, id), transactionScopeCondition(await getViewerScope())));
+    .where(and(eq(transactions.id, id), tenantScopeCondition(scopeById, transactions.tenantId), transactionScopeCondition(scopeById)));
 
   if (!txRow) return null;
 
@@ -433,8 +437,9 @@ export async function createTransaction(
   agentInputs: FormAgentInput[] = [],
   templateGroupIds?: string[],
 ): Promise<{ success: boolean; data?: { id: string }; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
+  const tenantId = tenant.tenantId;
 
   const parsed = transactionSchema.safeParse(data);
   if (!parsed.success) {
@@ -449,6 +454,7 @@ export async function createTransaction(
   try {
     const newTx = {
       id,
+      tenantId, // stamped from session, never client input
       address: values.address,
       city: n(values.city),
       state: n(values.state) ?? 'CA',
@@ -498,22 +504,36 @@ export async function createTransaction(
     await db.insert(transactions).values(newTx);
 
     if (agentInputs.length > 0) {
-      await db.insert(transactionAgents).values(
-        agentInputs.map((a) => ({
-          id: crypto.randomUUID(),
-          transactionId: id,
-          agentId: a.agentId,
-          side: a.side,
-          isPrimary: a.isPrimary,
-          sortOrder: 0,
-        })),
-      );
+      // Only link agents that belong to this tenant (defends against forged ids).
+      const ownAgentRows = await db
+        .select({ id: agents.id })
+        .from(agents)
+        .where(and(inArray(agents.id, agentInputs.map((a) => a.agentId)), eq(agents.tenantId, tenantId)));
+      const ownAgentIds = new Set(ownAgentRows.map((r) => r.id));
+      const validInputs = agentInputs.filter((a) => ownAgentIds.has(a.agentId));
+      if (validInputs.length > 0) {
+        await db.insert(transactionAgents).values(
+          validInputs.map((a) => ({
+            id: crypto.randomUUID(),
+            tenantId,
+            transactionId: id,
+            agentId: a.agentId,
+            side: a.side,
+            isPrimary: a.isPrimary,
+            sortOrder: 0,
+          })),
+        );
+      }
     }
 
-    // Stamp tasks from active templates, scoped to selected groups when provided
+    // Stamp tasks from THIS TENANT's active templates, scoped to selected groups.
     const [templates, allGroups] = await Promise.all([
-      db.select().from(taskTemplates).where(eq(taskTemplates.isActive, true)).orderBy(asc(taskTemplates.sortOrder)),
-      db.select().from(taskTemplateGroups),
+      db
+        .select()
+        .from(taskTemplates)
+        .where(and(eq(taskTemplates.isActive, true), eq(taskTemplates.tenantId, tenantId)))
+        .orderBy(asc(taskTemplates.sortOrder)),
+      db.select().from(taskTemplateGroups).where(eq(taskTemplateGroups.tenantId, tenantId)),
     ]);
 
     const groups = templateGroupIds?.length
@@ -524,11 +544,12 @@ export async function createTransaction(
     if (stamped.length > 0) {
       await db
         .insert(transactionTasks)
-        .values(stamped.map((t) => ({ id: crypto.randomUUID(), ...t })));
+        .values(stamped.map((t) => ({ id: crypto.randomUUID(), tenantId, ...t })));
     }
 
     await db.insert(activityLog).values({
       id: crypto.randomUUID(),
+      tenantId,
       transactionId: id,
       userId,
       action: 'created',
@@ -549,8 +570,9 @@ export async function updateTransaction(
   id: string,
   data: TransactionFormValues,
 ): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
+  const tenantId = tenant.tenantId;
 
   const parsed = transactionSchema.safeParse(data);
   if (!parsed.success) {
@@ -610,16 +632,20 @@ export async function updateTransaction(
         notes: n(values.notes),
         updatedAt: new Date(),
       })
-      .where(eq(transactions.id, id));
+      // forged cross-tenant id updates zero rows
+      .where(and(eq(transactions.id, id), eq(transactions.tenantId, tenantId)));
 
-    // Recalculate all template-based task due dates
+    // Recalculate template-based task due dates (all reads tenant-scoped).
     const [existingTasks, templates, updatedRows] = await Promise.all([
       db
         .select({ id: transactionTasks.id, templateId: transactionTasks.templateId })
         .from(transactionTasks)
-        .where(eq(transactionTasks.transactionId, id)),
-      db.select().from(taskTemplates),
-      db.select().from(transactions).where(eq(transactions.id, id)),
+        .where(and(eq(transactionTasks.transactionId, id), eq(transactionTasks.tenantId, tenantId))),
+      db.select().from(taskTemplates).where(eq(taskTemplates.tenantId, tenantId)),
+      db
+        .select()
+        .from(transactions)
+        .where(and(eq(transactions.id, id), eq(transactions.tenantId, tenantId))),
     ]);
 
     const updated = updatedRows[0];
@@ -629,12 +655,13 @@ export async function updateTransaction(
         await db
           .update(transactionTasks)
           .set({ dueDate: u.dueDate, updatedAt: new Date() })
-          .where(eq(transactionTasks.id, u.id));
+          .where(and(eq(transactionTasks.id, u.id), eq(transactionTasks.tenantId, tenantId)));
       }
     }
 
     await db.insert(activityLog).values({
       id: crypto.randomUUID(),
+      tenantId,
       transactionId: id,
       userId,
       action: 'updated',
@@ -656,8 +683,9 @@ export async function updateTransactionStatus(
   id: string,
   status: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
+  const tenantId = tenant.tenantId;
 
   const session = await auth();
   const userId = session?.user?.id ?? null;
@@ -666,10 +694,11 @@ export async function updateTransactionStatus(
     await db
       .update(transactions)
       .set({ status: status as Transaction['status'], updatedAt: new Date() })
-      .where(eq(transactions.id, id));
+      .where(and(eq(transactions.id, id), eq(transactions.tenantId, tenantId)));
 
     await db.insert(activityLog).values({
       id: crypto.randomUUID(),
+      tenantId,
       transactionId: id,
       userId,
       action: 'status_changed',
@@ -690,11 +719,14 @@ export async function updateTransactionNotes(
   id: string,
   notes: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
 
   try {
-    await db.update(transactions).set({ notes, updatedAt: new Date() }).where(eq(transactions.id, id));
+    await db
+      .update(transactions)
+      .set({ notes, updatedAt: new Date() })
+      .where(and(eq(transactions.id, id), eq(transactions.tenantId, tenant.tenantId)));
     revalidatePath(`/transactions/${id}`);
     return { success: true };
   } catch {
@@ -703,15 +735,15 @@ export async function updateTransactionNotes(
 }
 
 export async function deleteTransaction(id: string): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
 
   try {
-    // Soft-delete: set status to 'cancelled'
+    // Soft-delete: set status to 'cancelled' (tenant-scoped)
     await db
       .update(transactions)
       .set({ status: 'cancelled', updatedAt: new Date() })
-      .where(eq(transactions.id, id));
+      .where(and(eq(transactions.id, id), eq(transactions.tenantId, tenant.tenantId)));
 
     revalidatePath('/transactions');
     revalidatePath('/dashboard');
