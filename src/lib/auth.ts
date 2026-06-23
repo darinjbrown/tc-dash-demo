@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { users, tenants } from '@/db/schema';
 import { authConfig } from '@/lib/auth.config';
+import { isTenantLoginAllowed } from '@/lib/roles';
 
 /**
  * Raised when a user's tenant is inactive. The `code` is surfaced to the login
@@ -43,18 +44,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         );
         if (!valid) return null;
 
-        // Tenant gate: a tenant user whose office is inactive is rejected at
-        // login (decision #7). Platform admins (no tenant) bypass this check.
+        // Tenant gate (decision #7): a tenant user whose office is inactive is
+        // rejected at login. Platform admins (no tenant) bypass. Decision logic
+        // lives in the pure isTenantLoginAllowed() (unit-tested).
+        let tenantIsActive: boolean | null = null;
         if (!user.isPlatformAdmin && user.tenantId) {
           const tenant = await db
             .select({ isActive: tenants.isActive })
             .from(tenants)
             .where(eq(tenants.id, user.tenantId))
             .get();
-          // Treat a missing or inactive tenant as inactive (fail-closed).
-          if (!tenant || !tenant.isActive) {
-            throw new InactiveTenantError();
-          }
+          tenantIsActive = tenant ? tenant.isActive : null;
+        }
+        if (
+          !isTenantLoginAllowed({
+            isPlatformAdmin: user.isPlatformAdmin,
+            tenantId: user.tenantId ?? null,
+            tenantIsActive,
+          })
+        ) {
+          throw new InactiveTenantError();
         }
 
         return {

@@ -35,3 +35,20 @@ export function isForbiddenForRole(pathname: string, role: string): boolean {
 export function isPlatformPath(pathname: string): boolean {
   return pathname === '/platform' || pathname.startsWith('/platform/');
 }
+
+/**
+ * Login gate for tenancy (pure; used by the credentials authorize flow).
+ * A platform admin (no tenant) always passes. A tenant user passes only when
+ * their tenant exists AND isActive. Missing/inactive tenant -> rejected at login
+ * with the "inactive" copy (decision #7). Fail-closed.
+ */
+export function isTenantLoginAllowed(input: {
+  isPlatformAdmin: boolean;
+  tenantId: string | null;
+  tenantIsActive: boolean | null; // null = tenant row missing
+}): boolean {
+  if (input.isPlatformAdmin) return true;
+  if (!input.tenantId) return false;          // tenant user must have a tenant
+  if (input.tenantIsActive !== true) return false; // missing or inactive -> reject
+  return true;
+}

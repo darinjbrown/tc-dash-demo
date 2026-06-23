@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 // No mocks needed: roles.ts imports nothing from auth or the database.
-import { canManageAll, isReadOnlyRole, isForbiddenForRole } from '@/lib/roles';
+import { canManageAll, isReadOnlyRole, isForbiddenForRole , isTenantLoginAllowed} from '@/lib/roles';
 
 describe('canManageAll / isReadOnlyRole', () => {
   it('privileged roles can manage all', () => {
@@ -39,5 +39,23 @@ describe('isForbiddenForRole', () => {
   it('does not over-match similar path prefixes', () => {
     expect(isForbiddenForRole('/users-report', 'agent')).toBe(false);
     expect(isForbiddenForRole('/settingsx', 'agent')).toBe(false);
+  });
+});
+
+describe('isTenantLoginAllowed (inactive-tenant gate)', () => {
+  it('platform admin always passes (no tenant)', () => {
+    expect(isTenantLoginAllowed({ isPlatformAdmin: true, tenantId: null, tenantIsActive: null })).toBe(true);
+  });
+  it('active tenant user passes', () => {
+    expect(isTenantLoginAllowed({ isPlatformAdmin: false, tenantId: 't1', tenantIsActive: true })).toBe(true);
+  });
+  it('INACTIVE tenant user is rejected', () => {
+    expect(isTenantLoginAllowed({ isPlatformAdmin: false, tenantId: 't1', tenantIsActive: false })).toBe(false);
+  });
+  it('missing tenant row is rejected (fail-closed)', () => {
+    expect(isTenantLoginAllowed({ isPlatformAdmin: false, tenantId: 't1', tenantIsActive: null })).toBe(false);
+  });
+  it('tenant user with no tenant id is rejected (fail-closed)', () => {
+    expect(isTenantLoginAllowed({ isPlatformAdmin: false, tenantId: null, tenantIsActive: null })).toBe(false);
   });
 });
