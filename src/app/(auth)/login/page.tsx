@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { activeBrand } from '@/lib/brand-config';
+import { useBrand } from '@/hooks/use-brand';
 import { RequestAccessDialog } from '@/components/auth/request-access-dialog';
 
 const loginSchema = z.object({
@@ -22,6 +22,7 @@ type LoginForm = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
+  const { brand } = useBrand();
   const [error, setError] = useState<string | null>(null);
   const [requestOpen, setRequestOpen] = useState(false);
 
@@ -62,12 +63,12 @@ export default function LoginPage() {
       {/* Brand header */}
       <div className="mb-8 text-center">
         <img
-          src={activeBrand.logo}
-          alt={activeBrand.name}
+          src={brand.logo}
+          alt={brand.name}
           className="mx-auto mb-3 h-16 w-auto object-contain"
         />
-        {activeBrand.tagline && (
-          <p className="text-sm text-muted-foreground">{activeBrand.tagline}</p>
+        {brand.tagline && (
+          <p className="text-sm text-muted-foreground">{brand.tagline}</p>
         )}
       </div>
 

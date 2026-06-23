@@ -148,5 +148,9 @@ export const premiereBrand: BrandConfig = {
   borderRadius: '0.25rem',
 };
 
-// ← Change this to switch the active brand across the entire app
+// DEPRECATED as the live source. Branding is now resolved at RUNTIME per tenant
+// from the `tenant_branding` table (see src/lib/tenant-branding.ts). `defaultBrand`
+// is the platform default seed for new tenants. `activeBrand` remains only as a
+// compatibility alias for the unauthenticated shell fallback — do not rely on it
+// to rebrand a tenant.
 export const activeBrand: BrandConfig = defaultBrand;

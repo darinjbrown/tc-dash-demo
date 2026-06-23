@@ -3,7 +3,8 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/providers/theme-provider';
 import { SessionProvider } from '@/components/providers/session-provider';
-import { activeBrand } from '@/lib/brand-config';
+import { defaultBrand } from '@/lib/brand-config';
+import { getCurrentBrand } from '@/lib/tenant-branding';
 import { generateBrandCss } from '@/lib/brand-utils';
 import { Toaster } from '@/components/ui/sonner';
 
@@ -17,18 +18,23 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
+// Static metadata uses the platform default; per-tenant title is applied at the
+// dashboard level if needed. (Branding is now runtime/per-tenant, not compile-time.)
 export const metadata: Metadata = {
-  title: activeBrand.name,
-  description: activeBrand.tagline ?? 'Transaction Coordinator Dashboard',
+  title: defaultBrand.name,
+  description: defaultBrand.tagline ?? 'Transaction Coordinator Dashboard',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Inject brand CSS server-side to avoid flash of unstyled content
-  const brandCss = generateBrandCss(activeBrand);
+  // Resolve the current tenant's brand at runtime (falls back to the platform
+  // default for the login/marketing shell or platform admins). Rendered into a
+  // server <style> tag so the correct colors are in the initial HTML — no flash.
+  const brand = await getCurrentBrand();
+  const brandCss = generateBrandCss(brand);
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -37,7 +43,7 @@ export default function RootLayout({
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <SessionProvider>
-          <ThemeProvider initialBrand={activeBrand}>
+          <ThemeProvider initialBrand={brand}>
             {children}
             <Toaster richColors position="top-right" />
           </ThemeProvider>
