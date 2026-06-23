@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, primaryKey, index } from 'drizzle-orm/sqlite-core';
 import { relations } from 'drizzle-orm';
 
 // ============================================================
@@ -14,6 +14,13 @@ export const users = sqliteTable('users', {
   hashedPassword: text('hashed_password'),
   role: text('role', { enum: ['admin', 'broker', 'tc', 'agent'] })
     .default('tc')
+    .notNull(),
+  // Tenant membership. NULL only for platform superadmins (who belong to no
+  // office and act across tenants exclusively via the /platform console).
+  tenantId: text('tenant_id').references(() => tenants.id),
+  // Platform superadmin (d20web). Stored 0/1; boolean in app. Default false.
+  isPlatformAdmin: integer('is_platform_admin', { mode: 'boolean' })
+    .default(false)
     .notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .$defaultFn(() => new Date()),
@@ -61,8 +68,50 @@ export const verificationTokens = sqliteTable(
 // App tables
 // ============================================================
 
+// A tenant is an office/brokerage — the unit of data isolation. One row per
+// office. `slug` is the white-label handle (immutable once issued). `isActive`
+// is the manual on/off toggled from the /platform console and checked at login.
+// `billingStatus` is reserved for future automated billing (unused by logic).
+export const tenants = sqliteTable('tenants', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  // Manual active/inactive switch (default active). Login rejects inactive.
+  isActive: integer('is_active', { mode: 'boolean' }).default(true).notNull(),
+  // Reserved billing attach point — set/read by future Stripe/Zoho enforcement,
+  // not by current logic. Kept so the model needs no re-migration when billing lands.
+  billingStatus: text('billing_status').default('manual').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
+    .$defaultFn(() => new Date()),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+    .$defaultFn(() => new Date()),
+});
+
+// Per-tenant brand record (1:1 with tenant). Shaped to match the BrandConfig
+// interface so generateBrandCss() / brand-utils reuse it verbatim. Colors are
+// JSON text blobs (parse-clean; target Postgres jsonb on the deferred migration).
+export const tenantBranding = sqliteTable('tenant_branding', {
+  tenantId: text('tenant_id')
+    .primaryKey()
+    .references(() => tenants.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  tagline: text('tagline'),
+  logoUrl: text('logo_url'),
+  logoDarkUrl: text('logo_dark_url'),
+  logoIconUrl: text('logo_icon_url'),
+  colors: text('colors').notNull(), // JSON blob matching BrandConfig.colors
+  darkColors: text('dark_colors'),  // JSON blob (partial overrides), nullable
+  borderRadius: text('border_radius').default('0.5rem').notNull(),
+  fontFamily: text('font_family'),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+    .$defaultFn(() => new Date()),
+});
+
 export const agents = sqliteTable('agents', {
   id: text('id').primaryKey(),
+  tenantId: text('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
   name: text('name').notNull(),
   email: text('email').notNull(),
   phone: text('phone'),
@@ -75,10 +124,13 @@ export const agents = sqliteTable('agents', {
     .$defaultFn(() => new Date()),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .$defaultFn(() => new Date()),
-});
+}, (table) => [index('agents_tenant_idx').on(table.tenantId)]);
 
 export const transactions = sqliteTable('transactions', {
   id: text('id').primaryKey(),
+  tenantId: text('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
   address: text('address').notNull(),
   city: text('city'),
   state: text('state').default('CA'),
@@ -139,10 +191,14 @@ export const transactions = sqliteTable('transactions', {
     .$defaultFn(() => new Date()),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .$defaultFn(() => new Date()),
-});
+}, (table) => [index('transactions_tenant_idx').on(table.tenantId)]);
 
 export const transactionAgents = sqliteTable('transaction_agents', {
   id: text('id').primaryKey(),
+  // Denormalized tenant (defense-in-depth + join-free isolation predicate).
+  tenantId: text('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
   transactionId: text('transaction_id')
     .notNull()
     .references(() => transactions.id, { onDelete: 'cascade' }),
@@ -153,10 +209,13 @@ export const transactionAgents = sqliteTable('transaction_agents', {
   isPrimary: integer('is_primary', { mode: 'boolean' }).default(false).notNull(),
   sortOrder: integer('sort_order').default(0).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).$defaultFn(() => new Date()),
-});
+}, (table) => [index('transaction_agents_tenant_idx').on(table.tenantId)]);
 
 export const taskTemplateGroups = sqliteTable('task_template_groups', {
   id: text('id').primaryKey(),
+  tenantId: text('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
   name: text('name').notNull(),
   description: text('description'),
   transactionType: text('transaction_type', {
@@ -167,10 +226,13 @@ export const taskTemplateGroups = sqliteTable('task_template_groups', {
   sortOrder: integer('sort_order').default(0).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .$defaultFn(() => new Date()),
-});
+}, (table) => [index('task_template_groups_tenant_idx').on(table.tenantId)]);
 
 export const taskTemplates = sqliteTable('task_templates', {
   id: text('id').primaryKey(),
+  tenantId: text('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
   templateGroupId: text('template_group_id').references(() => taskTemplateGroups.id),
   name: text('name').notNull(),
   description: text('description'),
@@ -215,10 +277,14 @@ export const taskTemplates = sqliteTable('task_templates', {
   isActive: integer('is_active', { mode: 'boolean' }).default(true).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .$defaultFn(() => new Date()),
-});
+}, (table) => [index('task_templates_tenant_idx').on(table.tenantId)]);
 
 export const transactionTasks = sqliteTable('transaction_tasks', {
   id: text('id').primaryKey(),
+  // Denormalized tenant (defense-in-depth + join-free isolation predicate).
+  tenantId: text('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
   transactionId: text('transaction_id')
     .notNull()
     .references(() => transactions.id),
@@ -243,20 +309,26 @@ export const transactionTasks = sqliteTable('transaction_tasks', {
     .$defaultFn(() => new Date()),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .$defaultFn(() => new Date()),
-});
+}, (table) => [index('transaction_tasks_tenant_idx').on(table.tenantId)]);
 
 export const activityLog = sqliteTable('activity_log', {
   id: text('id').primaryKey(),
+  tenantId: text('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
   transactionId: text('transaction_id').references(() => transactions.id),
   userId: text('user_id'),
   action: text('action').notNull(), // 'created' | 'updated' | 'status_changed' | 'task_completed' | 'note_added'
   details: text('details'), // JSON string with change details
   createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .$defaultFn(() => new Date()),
-});
+}, (table) => [index('activity_log_tenant_idx').on(table.tenantId)]);
 
 export const accessRequests = sqliteTable('access_requests', {
   id: text('id').primaryKey(),
+  // Nullable: a public join request may arrive tenant-less; a platform admin
+  // assigns the tenant on approval.
+  tenantId: text('tenant_id').references(() => tenants.id),
   name: text('name').notNull(),
   email: text('email').notNull(),
   phone: text('phone').notNull(),
@@ -271,7 +343,25 @@ export const accessRequests = sqliteTable('access_requests', {
 // Relations
 // ============================================================
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const tenantsRelations = relations(tenants, ({ one, many }) => ({
+  branding: one(tenantBranding, {
+    fields: [tenants.id],
+    references: [tenantBranding.tenantId],
+  }),
+  users: many(users),
+  agents: many(agents),
+  transactions: many(transactions),
+}));
+
+export const tenantBrandingRelations = relations(tenantBranding, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [tenantBranding.tenantId],
+    references: [tenants.id],
+  }),
+}));
+
+export const usersRelations = relations(users, ({ one, many }) => ({
+  tenant: one(tenants, { fields: [users.tenantId], references: [tenants.id] }),
   accounts: many(accounts),
   sessions: many(sessions),
   activityLog: many(activityLog),
@@ -353,5 +443,9 @@ export type NewTransactionTask = typeof transactionTasks.$inferInsert;
 export type ActivityLog = typeof activityLog.$inferSelect;
 export type NewActivityLog = typeof activityLog.$inferInsert;
 export type AccessRequest = typeof accessRequests.$inferSelect;
+export type Tenant = typeof tenants.$inferSelect;
+export type NewTenant = typeof tenants.$inferInsert;
+export type TenantBranding = typeof tenantBranding.$inferSelect;
+export type NewTenantBranding = typeof tenantBranding.$inferInsert;
 export type TransactionAgent = typeof transactionAgents.$inferSelect;
 export type NewTransactionAgent = typeof transactionAgents.$inferInsert;

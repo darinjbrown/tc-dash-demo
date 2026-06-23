@@ -65,6 +65,35 @@ npm run dev               # http://localhost:3000
 > `db:demo-seed` **clears all existing rows first**, then loads the demo data.
 > Only ever run it against the demo database.
 
+> **Multi-tenant note.** The demo seed creates a single tenant — **Crestline
+> Realty** (slug `tenant`) — and stamps all demo data to it. The platform is
+> multi-tenant: every owned row carries a `tenant_id`, isolation is enforced in
+> `src/lib/access.ts`, and tenant identity is a signed JWT claim (no subdomains
+> in v1). A d20web **platform superadmin** (`isPlatformAdmin`, no tenant) manages
+> tenants from `/platform`. To lift an *existing* single-tenant DB onto the
+> platform without reseeding, run `npm run db:backfill-tenant` instead of the
+> seed — it creates the demo tenant and stamps `tenant_id` onto existing rows.
+
+### Cloudflare R2 (optional — per-tenant logo uploads)
+
+Per-tenant logo **uploads** (Settings → Branding) use Cloudflare R2 (S3-compatible).
+This is optional: **if the R2 env vars are absent the upload control is hidden and a
+logo URL can still be entered manually — the app builds and runs without R2.**
+
+1. Create an R2 bucket and an API token (Account ID + Access Key ID + Secret).
+2. Make the bucket public (or front it with a custom domain / the R2 dev URL).
+3. Set these in `.env.local` (and the Vercel project for deploys):
+
+```
+R2_ACCOUNT_ID=<cloudflare account id>
+R2_ACCESS_KEY_ID=<r2 access key id>
+R2_SECRET_ACCESS_KEY=<r2 secret access key>
+R2_BUCKET=<bucket name>
+R2_PUBLIC_BASE_URL=https://<your-public-bucket-domain>
+```
+
+Stored logo URLs are `R2_PUBLIC_BASE_URL` + `/` + the uploaded object key.
+
 ## 4. Deploy to a SEPARATE Vercel project
 
 1. Create a **new** Vercel project pointed at this repo
