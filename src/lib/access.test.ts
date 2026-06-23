@@ -75,3 +75,13 @@ describe('transactionScopeCondition', () => {
     expect(cond).toBeDefined();
   });
 });
+
+// ============================================================
+// Multi-tenant scope (Phases 0/2/8). Phase 0 scaffolds the block;
+// Phase 2 adds the resolver tests; Phase 8 adds isolation tests.
+// ============================================================
+describe('tenant scope (multi-tenant)', () => {
+  it('scaffold present (filled in Phase 2)', () => {
+    expect(true).toBe(true);
+  });
+});
