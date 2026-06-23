@@ -29,3 +29,9 @@ export function isForbiddenForRole(pathname: string, role: string): boolean {
   if (canManageAll(role)) return false;
   return AGENT_FORBIDDEN_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + '/'));
 }
+
+// The platform superadmin surface. Gated to isPlatformAdmin only (server-side
+// in proxy.ts, which reads the flag straight off the JWT — no DB here).
+export function isPlatformPath(pathname: string): boolean {
+  return pathname === '/platform' || pathname.startsWith('/platform/');
+}

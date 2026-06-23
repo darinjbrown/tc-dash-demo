@@ -42,7 +42,14 @@ export default function LoginPage() {
     });
 
     if (result?.error) {
-      setError('Invalid email or password. Please try again.');
+      // The credentials provider raises an InactiveTenantError (code 'inactive')
+      // when the office is switched off from the /platform console (decision #7).
+      const code = (result as { code?: string }).code;
+      if (code === 'inactive') {
+        setError('This account is inactive — contact d20web.');
+      } else {
+        setError('Invalid email or password. Please try again.');
+      }
       return;
     }
 
