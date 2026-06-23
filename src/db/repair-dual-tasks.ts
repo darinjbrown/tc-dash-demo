@@ -27,29 +27,39 @@ const client = createClient({
 async function run() {
   console.log('🔄 Populating Dual Agency group with all listing + purchase tasks...\n');
 
-  // ── 1. Resolve group IDs ──────────────────────────────────────────────────
+  // ── 1. Resolve group IDs PER TENANT ───────────────────────────────────────
+  // task_template_groups is now tenant-scoped: each office has its own built-in
+  // listing/purchase/dual groups. Run the merge independently for every tenant.
   const groupRows = await client.execute(
-    `SELECT id, name, transaction_type FROM task_template_groups WHERE is_default = 1`,
+    `SELECT id, name, transaction_type, tenant_id FROM task_template_groups WHERE is_default = 1`,
   );
 
-  type GroupRow = { id: string; name: string; transaction_type: string };
+  type GroupRow = { id: string; name: string; transaction_type: string; tenant_id: string };
 
-  const listingGroup = groupRows.rows.find(
-    (r) => (r as unknown as GroupRow).transaction_type === 'listing',
-  ) as unknown as GroupRow | undefined;
+  const tenantIds = Array.from(
+    new Set(groupRows.rows.map((r) => (r as unknown as GroupRow).tenant_id)),
+  );
 
-  const purchaseGroup = groupRows.rows.find(
-    (r) => (r as unknown as GroupRow).transaction_type === 'purchase',
-  ) as unknown as GroupRow | undefined;
+  for (const tenantId of tenantIds) {
+    await repairForTenant(tenantId, groupRows.rows as unknown as GroupRow[]);
+  }
 
-  const dualGroup = groupRows.rows.find(
-    (r) => (r as unknown as GroupRow).transaction_type === 'dual',
-  ) as unknown as GroupRow | undefined;
+  console.log('\n✅ Dual-task repair complete for all tenants.');
+  process.exit(0);
+}
+
+type GroupRow = { id: string; name: string; transaction_type: string; tenant_id: string };
+
+async function repairForTenant(tenantId: string, allGroups: GroupRow[]) {
+  console.log(`\n── Tenant ${tenantId} ──`);
+  const tenantGroups = allGroups.filter((g) => g.tenant_id === tenantId);
+  const listingGroup = tenantGroups.find((r) => r.transaction_type === 'listing');
+  const purchaseGroup = tenantGroups.find((r) => r.transaction_type === 'purchase');
+  const dualGroup = tenantGroups.find((r) => r.transaction_type === 'dual');
 
   if (!listingGroup || !purchaseGroup || !dualGroup) {
-    console.error('❌ Could not find all three built-in groups. Aborting.');
-    console.log('   Groups found:', groupRows.rows);
-    process.exit(1);
+    console.warn('   ⚠️  Missing one of the three built-in groups for this tenant — skipping.');
+    return;
   }
 
   console.log(`✅ Listing group:      ${listingGroup.id}`);
@@ -118,12 +128,13 @@ async function run() {
     const newId = crypto.randomUUID();
     await client.execute({
       sql: `INSERT INTO task_templates
-              (id, template_group_id, name, description, category,
+              (id, tenant_id, template_group_id, name, description, category,
                relative_due_days, relative_to, sort_order,
                is_required, is_active, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         newId,
+        tenantId,
         dualGroup.id,
         r.name,
         r.description ?? null,

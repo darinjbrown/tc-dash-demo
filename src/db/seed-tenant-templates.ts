@@ -13,12 +13,14 @@
 import { taskTemplateGroups, taskTemplates } from './schema';
 import { defaultTaskTemplates } from '../lib/task-templates';
 
-type Db = {
-  insert: (table: unknown) => { values: (rows: unknown) => Promise<unknown> };
+// Minimal structural shape: anything with Drizzle's `insert(table).values(rows)`.
+// Using a broad type keeps this usable from both the app `db` and scripts.
+type InsertableDb = {
+  insert: (table: never) => { values: (rows: never) => Promise<unknown> };
 };
 
 export async function seedTenantTemplates(
-  database: Db,
+  database: InsertableDb,
   tenantId: string,
 ): Promise<{ listingGroupId: string; purchaseGroupId: string; dualGroupId: string }> {
   const listingGroupId = crypto.randomUUID();
@@ -26,7 +28,7 @@ export async function seedTenantTemplates(
   const dualGroupId = crypto.randomUUID();
   const now = new Date();
 
-  await database.insert(taskTemplateGroups).values([
+  await (database.insert as (t: unknown) => { values: (r: unknown) => Promise<unknown> })(taskTemplateGroups).values([
     {
       id: listingGroupId,
       tenantId,
@@ -77,7 +79,7 @@ export async function seedTenantTemplates(
     createdAt: now,
   }));
 
-  await database.insert(taskTemplates).values(templateRows);
+  await (database.insert as (t: unknown) => { values: (r: unknown) => Promise<unknown> })(taskTemplates).values(templateRows);
 
   return { listingGroupId, purchaseGroupId, dualGroupId };
 }
