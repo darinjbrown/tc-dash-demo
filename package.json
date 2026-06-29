@@ -14,11 +14,13 @@
     "db:seed": "npx tsx src/db/seed.ts",
     "db:demo-seed": "npx tsx src/db/demo-seed.ts",
     "db:migrate-agents": "npx tsx src/db/migrate-to-multi-agent.ts",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:backfill-tenant": "npx tsx src/db/backfill-tenant.ts"
   },
   "dependencies": {
     "@auth/core": "^0.41.0",
     "@auth/drizzle-adapter": "^1.11.1",
+    "@aws-sdk/client-s3": "^3.1074.0",
     "@hookform/resolvers": "^5.2.2",
     "@libsql/client": "^0.17.0",
     "bcryptjs": "^3.0.3",

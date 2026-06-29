@@ -27,8 +27,23 @@ async function run() {
 
   // ── 1. Resolve group IDs ──────────────────────────────────────────────────
   const groupRows = await client.execute(
-    `SELECT id, name, transaction_type FROM task_template_groups WHERE is_default = 1`,
+    `SELECT id, name, transaction_type, tenant_id FROM task_template_groups WHERE is_default = 1`,
   );
+
+  // task_template_groups is tenant-scoped. This one-off operates within a single
+  // tenant: it requires exactly one default Listing + Purchase group. For a
+  // multi-tenant DB, run per tenant by filtering groupRows up front.
+  const tenantIds = Array.from(
+    new Set(groupRows.rows.map((r) => (r as unknown as { tenant_id: string }).tenant_id)),
+  );
+  if (tenantIds.length !== 1) {
+    console.error(
+      `❌ Found ${tenantIds.length} tenants. This one-off repair targets a single tenant; ` +
+        'run it against a single-tenant DB or adapt it to loop per tenant. Aborting.',
+    );
+    process.exit(1);
+  }
+  const tenantId = tenantIds[0];
 
   const listingGroup = groupRows.rows.find(
     (r) => (r as unknown as { transaction_type: string }).transaction_type === 'listing',
@@ -112,12 +127,13 @@ async function run() {
     const newId = crypto.randomUUID();
     await client.execute({
       sql: `INSERT INTO task_templates
-              (id, template_group_id, name, description, category,
+              (id, tenant_id, template_group_id, name, description, category,
                relative_due_days, relative_to, sort_order,
                is_required, is_active, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         newId,
+        tenantId,
         listingGroup.id,
         r.name,
         r.description ?? null,

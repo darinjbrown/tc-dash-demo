@@ -13,6 +13,7 @@ import { drizzle } from 'drizzle-orm/libsql';
 import { createClient } from '@libsql/client';
 import * as schema from './schema';
 import { defaultTaskTemplates } from '../lib/task-templates';
+import { defaultBrand } from '../lib/brand-config';
 import bcrypt from 'bcryptjs';
 
 // Load env manually when running outside Next.js
@@ -117,6 +118,35 @@ async function seed() {
   await db.delete(schema.accounts);
   await db.delete(schema.verificationTokens);
   await db.delete(schema.users);
+  await db.delete(schema.tenantBranding);
+  await db.delete(schema.tenants);
+
+  // ── Tenant (demo: Crestline Realty, slug "tenant") ─────────────────────
+  console.log('  Seeding demo tenant...');
+  const tenantId = uuid();
+  await db.insert(schema.tenants).values({
+    id: tenantId,
+    name: 'Crestline Realty',
+    slug: 'tenant',
+    isActive: true,
+    billingStatus: 'manual',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  await db.insert(schema.tenantBranding).values({
+    tenantId,
+    name: defaultBrand.name,
+    tagline: defaultBrand.tagline ?? null,
+    logoUrl: defaultBrand.logo,
+    logoDarkUrl: defaultBrand.logoDark ?? null,
+    logoIconUrl: defaultBrand.logoIcon,
+    colors: JSON.stringify(defaultBrand.colors),
+    darkColors: defaultBrand.darkColors ? JSON.stringify(defaultBrand.darkColors) : null,
+    borderRadius: defaultBrand.borderRadius,
+    fontFamily: defaultBrand.fontFamily ?? null,
+    updatedAt: new Date(),
+  });
+  console.log('    → tenant "Crestline Realty" + branding inserted');
 
   // ── Admin users ────────────────────────────────────────────────────────
   console.log('  Seeding admin users...');
@@ -129,14 +159,18 @@ async function seed() {
       email: 'admin@example.com',
       hashedPassword,
       role: 'admin',
+      tenantId,
       createdAt: new Date(),
     },
     {
+      // d20web platform superadmin: belongs to no tenant, manages /platform.
       id: uuid(),
       name: 'Darin Brown',
       email: 'info@d20web.com',
       hashedPassword,
       role: 'admin',
+      tenantId: null,
+      isPlatformAdmin: true,
       createdAt: new Date(),
     },
   ]);
@@ -150,6 +184,7 @@ async function seed() {
   await db.insert(schema.agents).values([
     {
       id: agent1Id,
+      tenantId,
       name: 'Sarah Johnson',
       email: 'sarah.johnson@sonomarealty.com',
       phone: '(707) 555-0101',
@@ -162,6 +197,7 @@ async function seed() {
     },
     {
       id: agent2Id,
+      tenantId,
       name: 'Marcus Chen',
       email: 'marcus.chen@sonomarealty.com',
       phone: '(707) 555-0202',
@@ -174,6 +210,7 @@ async function seed() {
     },
     {
       id: agent3Id,
+      tenantId,
       name: 'Linda Ramirez',
       email: 'linda.ramirez@northbayproperties.com',
       phone: '(707) 555-0303',
@@ -195,6 +232,7 @@ async function seed() {
   await db.insert(schema.taskTemplateGroups).values([
     {
       id: listingGroupId,
+      tenantId,
       name: 'Listing Template',
       description: 'Tasks for listing transactions',
       transactionType: 'listing',
@@ -205,6 +243,7 @@ async function seed() {
     },
     {
       id: purchaseGroupId,
+      tenantId,
       name: 'Purchase Template',
       description: 'Tasks for purchase transactions',
       transactionType: 'purchase',
@@ -215,6 +254,7 @@ async function seed() {
     },
     {
       id: dualGroupId,
+      tenantId,
       name: 'Dual Agency Template',
       description: 'Additional tasks specific to dual agency transactions',
       transactionType: 'dual',
@@ -234,6 +274,7 @@ async function seed() {
       t.transactionType === 'listing' ? listingGroupId : purchaseGroupId;
     return {
       id: uuid(),
+      tenantId,
       templateGroupId,
       name: t.name,
       description: t.description ?? null,
@@ -259,6 +300,7 @@ async function seed() {
     // Sarah — 3 transactions
     {
       id: uuid(),
+      tenantId,
       address: '412 Vineyard Ln',
       city: 'Healdsburg',
       state: 'CA',
@@ -295,6 +337,7 @@ async function seed() {
     },
     {
       id: uuid(),
+      tenantId,
       address: '2205 Mendocino Ave #4B',
       city: 'Santa Rosa',
       state: 'CA',
@@ -317,6 +360,7 @@ buyerCommissionPercent: '2.5',
     },
     {
       id: uuid(),
+      tenantId,
       address: '88 W Watmaugh Rd',
       city: 'Sonoma',
       state: 'CA',
@@ -353,6 +397,7 @@ buyerCommissionPercent: '2.5',
     // Marcus — 3 transactions
     {
       id: uuid(),
+      tenantId,
       address: '4520 Chalk Hill Rd',
       city: 'Healdsburg',
       state: 'CA',
@@ -387,6 +432,7 @@ buyerCommissionPercent: '2.5',
     },
     {
       id: uuid(),
+      tenantId,
       address: '345 D St #12',
       city: 'Petaluma',
       state: 'CA',
@@ -412,6 +458,7 @@ buyerCommissionPercent: '2.5',
     },
     {
       id: uuid(),
+      tenantId,
       address: '1822 Sebastopol Rd',
       city: 'Santa Rosa',
       state: 'CA',
@@ -436,6 +483,7 @@ buyerCommissionPercent: '2.5',
     // Linda — 3 transactions
     {
       id: uuid(),
+      tenantId,
       address: '901 E Cotati Ave',
       city: 'Rohnert Park',
       state: 'CA',
@@ -469,6 +517,7 @@ buyerCommissionPercent: '2.5',
     },
     {
       id: uuid(),
+      tenantId,
       address: '17700 Armstrong Woods Rd',
       city: 'Guerneville',
       state: 'CA',
@@ -487,6 +536,7 @@ buyerCommissionPercent: '2.5',
     },
     {
       id: uuid(),
+      tenantId,
       address: '1250 Aviation Blvd',
       city: 'Santa Rosa',
       state: 'CA',
@@ -533,6 +583,7 @@ buyerCommissionPercent: '2.5',
   const transactionAgentRows: schema.NewTransactionAgent[] = agentAssignments.map(
     ({ txIndex, agentId, side }) => ({
       id: uuid(),
+      tenantId,
       transactionId: transactionData[txIndex].id!,
       agentId,
       side,
@@ -599,6 +650,7 @@ buyerCommissionPercent: '2.5',
 
       allTasks.push({
         id: uuid(),
+        tenantId,
         transactionId: tx.id!,
         templateId: template.id,
         name: template.name,
@@ -626,6 +678,7 @@ buyerCommissionPercent: '2.5',
   console.log('  Seeding activity log...');
   const activityEntries: schema.NewActivityLog[] = transactionData.map((tx) => ({
     id: uuid(),
+    tenantId,
     transactionId: tx.id!,
     userId: adminId,
     action: 'created',

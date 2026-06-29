@@ -88,17 +88,24 @@ export function AppSidebar() {
               size="lg"
               asChild
               tooltip={brand.name}
-              className="h-auto gap-4 overflow-visible [&>span:last-child]:whitespace-normal [&>span:last-child]:overflow-visible [&>span:last-child]:[text-overflow:unset]"
+              className="h-auto gap-3 group-data-[collapsible=icon]:p-1.5! [&>span:last-child]:whitespace-normal"
             >
               <Link href="/dashboard">
-                {/* Full logo at natural aspect ratio — no width constraint */}
+                {/* Full wordmark when expanded — constrained to the sidebar width so it
+                    never overflows onto the top bar. Hidden in collapsed icon mode. */}
                 <img
                   src={brand.logo}
                   alt={brand.name}
-                  className="h-16 w-auto object-contain shrink-0"
+                  className="h-10 w-auto max-w-full object-contain group-data-[collapsible=icon]:hidden"
+                />
+                {/* Square icon when collapsed to icon-only width. */}
+                <img
+                  src={brand.logoIcon}
+                  alt={brand.name}
+                  className="hidden size-8 shrink-0 object-contain group-data-[collapsible=icon]:block"
                 />
                 {/* Tagline — hidden automatically in collapsed icon-only mode */}
-                <span className="flex-1 text-center text-base text-muted-foreground leading-snug">
+                <span className="flex-1 text-center text-base text-muted-foreground leading-snug group-data-[collapsible=icon]:hidden">
                   {brand.tagline}
                 </span>
               </Link>

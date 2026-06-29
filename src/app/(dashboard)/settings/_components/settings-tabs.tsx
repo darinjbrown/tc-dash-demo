@@ -11,7 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { BrandToggle } from './brand-toggle';
+import { BrandingTab } from './branding-tab';
+import type { BrandConfig } from '@/lib/brand-config';
 import { updateProfile, changePassword } from '@/actions/users';
 
 // ─── Profile Tab ──────────────────────────────────────────────────────────────
@@ -134,49 +135,16 @@ function ProfileTab({ user }: { user: { name: string | null; email: string } }) 
   );
 }
 
-// ─── Branding Tab ─────────────────────────────────────────────────────────────
-
-function BrandingTab() {
-  return (
-    <div className="space-y-8 max-w-2xl">
-      <section className="rounded-lg border p-6">
-        <h3 className="text-base font-semibold mb-1">Live Brand Preview</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          Toggle between brand configs to verify the rebranding system instantly.
-        </p>
-        <BrandToggle />
-      </section>
-
-      <section className="rounded-lg border p-6 space-y-3">
-        <h3 className="text-base font-semibold">How Rebranding Works</h3>
-        <p className="text-sm text-muted-foreground">
-          All visual theming is driven by the{' '}
-          <code className="bg-muted px-1 rounded text-xs">activeBrand</code> object in{' '}
-          <code className="bg-muted px-1 rounded text-xs">src/lib/brand-config.ts</code>. Changing
-          that single object rebrands the entire app — colors, border radius, font, and logo — with
-          no page reload required.
-        </p>
-        <div className="rounded-md bg-muted p-4 text-xs font-mono text-muted-foreground space-y-1">
-          <p>1. Open <strong>src/lib/brand-config.ts</strong></p>
-          <p>2. Edit the <strong>activeBrand</strong> export</p>
-          <p>3. Save — the app picks up changes on next load</p>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          A future release will allow storing brand config in the database so it can be changed from
-          this UI without a code deploy.
-        </p>
-      </section>
-    </div>
-  );
-}
-
 // ─── Main Tabs Component ───────────────────────────────────────────────────────
 
 interface SettingsTabsProps {
   user: { name: string | null; email: string };
+  brand: BrandConfig;
+  r2Enabled: boolean;
+  canEditBranding: boolean;
 }
 
-export function SettingsTabs({ user }: SettingsTabsProps) {
+export function SettingsTabs({ user, brand, r2Enabled, canEditBranding }: SettingsTabsProps) {
   return (
     <Tabs defaultValue="profile" className="space-y-6">
       <TabsList className="grid w-full grid-cols-2 max-w-xs">
@@ -195,7 +163,7 @@ export function SettingsTabs({ user }: SettingsTabsProps) {
       </TabsContent>
 
       <TabsContent value="branding">
-        <BrandingTab />
+        <BrandingTab initialBrand={brand} r2Enabled={r2Enabled} canEdit={canEditBranding} />
       </TabsContent>
     </Tabs>
   );

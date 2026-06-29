@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth';
 import { SettingsTabs } from './_components/settings-tabs';
 import { redirect } from 'next/navigation';
+import { getTenantBranding, getBrandingEnv } from '@/actions/branding';
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -11,6 +12,11 @@ export default async function SettingsPage() {
     email: session.user.email ?? '',
   };
 
+  const role = (session.user as { role?: string }).role;
+  const canEditBranding = role === 'admin' || role === 'broker';
+
+  const [brand, env] = await Promise.all([getTenantBranding(), getBrandingEnv()]);
+
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <div>
@@ -20,7 +26,12 @@ export default async function SettingsPage() {
         </p>
       </div>
 
-      <SettingsTabs user={user} />
+      <SettingsTabs
+        user={user}
+        brand={brand}
+        r2Enabled={env.r2Enabled}
+        canEditBranding={canEditBranding}
+      />
     </div>
   );
 }

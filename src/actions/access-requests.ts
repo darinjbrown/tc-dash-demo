@@ -3,11 +3,11 @@
 import { db } from '@/db/client';
 import { accessRequests, users } from '@/db/schema';
 import type { AccessRequest } from '@/db/schema';
-import { eq, desc, count } from 'drizzle-orm';
+import { eq, and, or, isNull, desc, count } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
-import { auth } from '@/lib/auth';
+import { getViewerScope } from '@/lib/access';
 
 const requestSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -63,32 +63,52 @@ export async function createAccessRequest(
   }
 }
 
-// ─── Admin only ───────────────────────────────────────────────────────────────
+// ─── Admin only (tenant-scoped) ────────────────────────────────────────────────
+
+// A tenant admin: role admin AND bound to a tenant. Returns the tenantId.
+async function tenantAdmin(): Promise<{ userId: string; tenantId: string } | null> {
+  const scope = await getViewerScope();
+  if (scope.role !== 'admin' || !scope.tenantId || !scope.userId) return null;
+  return { userId: scope.userId, tenantId: scope.tenantId };
+}
 
 export async function getPendingRequestCount(): Promise<number> {
-  const session = await auth();
-  if (session?.user?.role !== 'admin') return 0;
-  const [row] = await db.select({ count: count() }).from(accessRequests);
+  const admin = await tenantAdmin();
+  if (!admin) return 0;
+  // This office's requests plus still-unassigned ones it may route.
+  const [row] = await db
+    .select({ count: count() })
+    .from(accessRequests)
+    .where(or(eq(accessRequests.tenantId, admin.tenantId), isNull(accessRequests.tenantId)));
   return row?.count ?? 0;
 }
 
 export async function getPendingRequests(): Promise<AccessRequest[]> {
-  const session = await auth();
-  if (session?.user?.role !== 'admin') return [];
-  return db.select().from(accessRequests).orderBy(desc(accessRequests.createdAt));
+  const admin = await tenantAdmin();
+  if (!admin) return [];
+  return db
+    .select()
+    .from(accessRequests)
+    .where(or(eq(accessRequests.tenantId, admin.tenantId), isNull(accessRequests.tenantId)))
+    .orderBy(desc(accessRequests.createdAt));
 }
 
 export async function approveRequest(
   id: string,
   role: 'admin' | 'broker' | 'tc' | 'agent',
 ): Promise<{ success: boolean; tempPassword?: string; error?: string }> {
-  const session = await auth();
-  if (session?.user?.role !== 'admin') return { success: false, error: 'Unauthorized' };
+  const admin = await tenantAdmin();
+  if (!admin) return { success: false, error: 'Unauthorized' };
 
   const [request] = await db
     .select()
     .from(accessRequests)
-    .where(eq(accessRequests.id, id));
+    .where(
+      and(
+        eq(accessRequests.id, id),
+        or(eq(accessRequests.tenantId, admin.tenantId), isNull(accessRequests.tenantId)),
+      ),
+    );
   if (!request) return { success: false, error: 'Request not found' };
 
   // Guard: email may have been registered since the request was submitted
@@ -117,6 +137,7 @@ export async function approveRequest(
       email: request.email,
       hashedPassword,
       role,
+      tenantId: admin.tenantId, // approved into the approving admin's office
     });
     await db.delete(accessRequests).where(eq(accessRequests.id, id));
     revalidatePath('/dashboard');
@@ -130,11 +151,18 @@ export async function approveRequest(
 export async function denyRequest(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const session = await auth();
-  if (session?.user?.role !== 'admin') return { success: false, error: 'Unauthorized' };
+  const admin = await tenantAdmin();
+  if (!admin) return { success: false, error: 'Unauthorized' };
 
   try {
-    await db.delete(accessRequests).where(eq(accessRequests.id, id));
+    await db
+      .delete(accessRequests)
+      .where(
+        and(
+          eq(accessRequests.id, id),
+          or(eq(accessRequests.tenantId, admin.tenantId), isNull(accessRequests.tenantId)),
+        ),
+      );
     revalidatePath('/dashboard');
     return { success: true };
   } catch {

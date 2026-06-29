@@ -28,6 +28,7 @@ import { drizzle } from 'drizzle-orm/libsql';
 import { createClient } from '@libsql/client';
 import * as schema from './schema';
 import { defaultTaskTemplates } from '../lib/task-templates';
+import { defaultBrand } from '../lib/brand-config';
 import bcrypt from 'bcryptjs';
 
 // Load env manually when running outside Next.js
@@ -132,6 +133,34 @@ async function seed() {
   await db.delete(schema.accounts);
   await db.delete(schema.verificationTokens);
   await db.delete(schema.users);
+  await db.delete(schema.tenantBranding);
+  await db.delete(schema.tenants);
+
+  // ── Tenant (Crestline Realty, slug "tenant") ────────────────────────────
+  console.log('  Seeding demo tenant...');
+  const tenantId = uuid();
+  await db.insert(schema.tenants).values({
+    id: tenantId,
+    name: 'Crestline Realty',
+    slug: 'tenant',
+    isActive: true,
+    billingStatus: 'manual',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  await db.insert(schema.tenantBranding).values({
+    tenantId,
+    name: defaultBrand.name,
+    tagline: defaultBrand.tagline ?? null,
+    logoUrl: defaultBrand.logo,
+    logoDarkUrl: defaultBrand.logoDark ?? null,
+    logoIconUrl: defaultBrand.logoIcon,
+    colors: JSON.stringify(defaultBrand.colors),
+    darkColors: defaultBrand.darkColors ? JSON.stringify(defaultBrand.darkColors) : null,
+    borderRadius: defaultBrand.borderRadius,
+    fontFamily: defaultBrand.fontFamily ?? null,
+    updatedAt: new Date(),
+  });
 
   // ── Office staff logins (admin + 2 TCs) ─────────────────────────────────
   console.log('  Seeding office staff (admin + TCs)...');
@@ -144,6 +173,7 @@ async function seed() {
   await db.insert(schema.users).values([
     {
       id: adminId,
+      tenantId,
       name: 'Toni Marsh',
       email: 'demo.admin@crestlinerealty.test',
       hashedPassword: demoPassword,
@@ -152,6 +182,7 @@ async function seed() {
     },
     {
       id: tc1Id,
+      tenantId,
       name: 'Priya Nair',
       email: 'priya.nair@crestlinerealty.test',
       hashedPassword: demoPassword,
@@ -160,6 +191,7 @@ async function seed() {
     },
     {
       id: tc2Id,
+      tenantId,
       name: 'Devon Brooks',
       email: 'devon.brooks@crestlinerealty.test',
       hashedPassword: demoPassword,
@@ -208,6 +240,7 @@ async function seed() {
   await db.insert(schema.agents).values(
     agentDefs.map((a, i) => ({
       id: agentIds[i],
+      tenantId,
       name: a.name,
       email: a.email,
       phone: a.phone,
@@ -225,6 +258,7 @@ async function seed() {
   await db.insert(schema.users).values(
     agentDefs.map((a) => ({
       id: uuid(),
+      tenantId,
       name: a.name,
       email: a.email,
       hashedPassword: demoPassword,
@@ -244,6 +278,7 @@ async function seed() {
   await db.insert(schema.taskTemplateGroups).values([
     {
       id: listingGroupId,
+      tenantId,
       name: 'Listing Template',
       description: 'Tasks for listing transactions',
       transactionType: 'listing',
@@ -254,6 +289,7 @@ async function seed() {
     },
     {
       id: purchaseGroupId,
+      tenantId,
       name: 'Purchase Template',
       description: 'Tasks for purchase transactions',
       transactionType: 'purchase',
@@ -264,6 +300,7 @@ async function seed() {
     },
     {
       id: dualGroupId,
+      tenantId,
       name: 'Dual Agency Template',
       description: 'Additional tasks specific to dual agency transactions',
       transactionType: 'dual',
@@ -281,6 +318,7 @@ async function seed() {
       t.transactionType === 'listing' ? listingGroupId : purchaseGroupId;
     return {
       id: uuid(),
+      tenantId,
       templateGroupId,
       name: t.name,
       description: t.description ?? null,
@@ -306,6 +344,7 @@ async function seed() {
     // 1 — Renee, purchase, mid-escrow (healthy)
     {
       id: uuid(),
+      tenantId,
       address: '1184 Almond Grove Way',
       city: 'Roseville',
       state: 'CA',
@@ -344,6 +383,7 @@ async function seed() {
     // 2 — Renee, listing, active on market
     {
       id: uuid(),
+      tenantId,
       address: '67 Larkspur Court',
       city: 'Folsom',
       state: 'CA',
@@ -366,6 +406,7 @@ async function seed() {
     // 3 — Marcus, dual agency, in escrow (note: contingencies upcoming)
     {
       id: uuid(),
+      tenantId,
       address: '900 Riverbend Terrace',
       city: 'Sacramento',
       state: 'CA',
@@ -403,6 +444,7 @@ async function seed() {
     // 4 — Marcus, purchase, OVERDUE pressure (acceptance long ago, close soon)
     {
       id: uuid(),
+      tenantId,
       address: '305 Magnolia Bluff Rd',
       city: 'El Dorado Hills',
       state: 'CA',
@@ -438,6 +480,7 @@ async function seed() {
     // 5 — Sofia, purchase, closed last week
     {
       id: uuid(),
+      tenantId,
       address: '2210 Briarcliff Lane',
       city: 'Rocklin',
       state: 'CA',
@@ -471,6 +514,7 @@ async function seed() {
     // 6 — Sofia, purchase, just accepted (pending → early)
     {
       id: uuid(),
+      tenantId,
       address: '418 Sutter Creek Dr',
       city: 'Lincoln',
       state: 'CA',
@@ -496,6 +540,7 @@ async function seed() {
     // 7 — Grant, listing, active (luxury)
     {
       id: uuid(),
+      tenantId,
       address: '15 Vista Del Lago',
       city: 'Granite Bay',
       state: 'CA',
@@ -517,6 +562,7 @@ async function seed() {
     // 8 — Grant, purchase, mid-escrow condo
     {
       id: uuid(),
+      tenantId,
       address: '3471 Watt Ave #208',
       city: 'Sacramento',
       state: 'CA',
@@ -552,6 +598,7 @@ async function seed() {
     // 9 — Hannah, purchase, closing this week
     {
       id: uuid(),
+      tenantId,
       address: '780 Cottonwood Pass',
       city: 'Auburn',
       state: 'CA',
@@ -587,6 +634,7 @@ async function seed() {
     // 10 — Hannah, listing, active rural acreage
     {
       id: uuid(),
+      tenantId,
       address: '14005 Bear Hollow Rd',
       city: 'Grass Valley',
       state: 'CA',
@@ -608,6 +656,7 @@ async function seed() {
     // 11 — Renee, purchase, closed a month ago (archive view)
     {
       id: uuid(),
+      tenantId,
       address: '529 Heritage Oak Dr',
       city: 'Roseville',
       state: 'CA',
@@ -640,6 +689,7 @@ async function seed() {
     // 12 — Marcus, purchase, cancelled (fell through)
     {
       id: uuid(),
+      tenantId,
       address: '6620 Pebblebrook Way',
       city: 'Citrus Heights',
       state: 'CA',
@@ -693,6 +743,7 @@ async function seed() {
   const transactionAgentRows: schema.NewTransactionAgent[] = agentAssignments.map(
     ({ txIndex, agentId, side }) => ({
       id: uuid(),
+      tenantId,
       transactionId: transactionData[txIndex].id!,
       agentId,
       side,
@@ -764,6 +815,7 @@ async function seed() {
 
       allTasks.push({
         id: uuid(),
+        tenantId,
         transactionId: tx.id!,
         templateId: template.id,
         name: template.name,
@@ -791,6 +843,7 @@ async function seed() {
   console.log('  Seeding activity log...');
   const activityEntries: schema.NewActivityLog[] = transactionData.map((tx) => ({
     id: uuid(),
+    tenantId,
     transactionId: tx.id!,
     userId: tx.createdBy ?? adminId,
     action: 'created',

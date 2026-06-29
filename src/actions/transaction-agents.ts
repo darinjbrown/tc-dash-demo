@@ -1,10 +1,10 @@
 'use server';
 
 import { db } from '@/db/client';
-import { transactionAgents, agents } from '@/db/schema';
+import { transactionAgents, agents, transactions } from '@/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
-import { getViewerScope, requireWriteAccess } from '@/lib/access';
+import { getViewerScope, requireTenantWrite } from '@/lib/access';
 
 export type TransactionAgentEntry = {
   id: string;
@@ -23,9 +23,36 @@ export async function getTransactionAgents(transactionId: string): Promise<{
   listing: TransactionAgentEntry[];
   buyer: TransactionAgentEntry[];
 }> {
-  // Restricted viewers may only see the agent roster of a transaction they are
-  // on. Fail-closed: an out-of-scope (or no-match) agent gets an empty roster.
   const scope = await getViewerScope();
+
+  // Tenant ring (outer): a viewer with no tenant (and not a platform admin)
+  // sees nothing. Platform admins don't use this tenant-scoped action surface.
+  if (!scope.tenantId) return { listing: [], buyer: [] };
+
+  // Confirm the transaction is in the viewer's tenant before exposing its roster.
+  const inTenant = await db
+    .select({ id: transactionAgents.id })
+    .from(transactionAgents)
+    .where(
+      and(
+        eq(transactionAgents.transactionId, transactionId),
+        eq(transactionAgents.tenantId, scope.tenantId),
+      ),
+    )
+    .limit(1);
+  // No in-tenant rows means either the tx is in another tenant or has no agents
+  // yet; verify the transaction itself is in-tenant for the latter case.
+  if (inTenant.length === 0) {
+    const tx = await db
+      .select({ id: transactions.id })
+      .from(transactions)
+      .where(and(eq(transactions.id, transactionId), eq(transactions.tenantId, scope.tenantId)))
+      .limit(1);
+    if (tx.length === 0) return { listing: [], buyer: [] };
+  }
+
+  // Agent ring (inner): restricted viewers may only see the roster of a
+  // transaction they are on. Fail-closed for a no-match agent.
   if (scope.agentIds !== null) {
     if (scope.agentIds.length === 0) return { listing: [], buyer: [] };
     const onTx = await db
@@ -34,6 +61,7 @@ export async function getTransactionAgents(transactionId: string): Promise<{
       .where(
         and(
           eq(transactionAgents.transactionId, transactionId),
+          eq(transactionAgents.tenantId, scope.tenantId),
           inArray(transactionAgents.agentId, scope.agentIds),
         ),
       )
@@ -56,7 +84,12 @@ export async function getTransactionAgents(transactionId: string): Promise<{
     })
     .from(transactionAgents)
     .innerJoin(agents, eq(transactionAgents.agentId, agents.id))
-    .where(eq(transactionAgents.transactionId, transactionId))
+    .where(
+      and(
+        eq(transactionAgents.transactionId, transactionId),
+        eq(transactionAgents.tenantId, scope.tenantId),
+      ),
+    )
     .orderBy(transactionAgents.sortOrder);
 
   return {
@@ -75,10 +108,26 @@ export async function addTransactionAgent(
   side: 'listing' | 'buyer',
   isPrimary: boolean,
 ): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
 
   try {
+    // Verify BOTH the transaction and the agent live in the viewer's tenant
+    // before linking them — prevents a cross-tenant link by construction.
+    const [tx] = await db
+      .select({ id: transactions.id })
+      .from(transactions)
+      .where(and(eq(transactions.id, transactionId), eq(transactions.tenantId, tenant.tenantId)))
+      .limit(1);
+    if (!tx) return { success: false, error: 'Transaction not found.' };
+
+    const [agent] = await db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(and(eq(agents.id, agentId), eq(agents.tenantId, tenant.tenantId)))
+      .limit(1);
+    if (!agent) return { success: false, error: 'Agent not found.' };
+
     const existing = await db
       .select({ id: transactionAgents.id })
       .from(transactionAgents)
@@ -87,6 +136,7 @@ export async function addTransactionAgent(
           eq(transactionAgents.transactionId, transactionId),
           eq(transactionAgents.agentId, agentId),
           eq(transactionAgents.side, side),
+          eq(transactionAgents.tenantId, tenant.tenantId),
         ),
       )
       .limit(1);
@@ -103,12 +153,14 @@ export async function addTransactionAgent(
           and(
             eq(transactionAgents.transactionId, transactionId),
             eq(transactionAgents.side, side),
+            eq(transactionAgents.tenantId, tenant.tenantId),
           ),
         );
     }
 
     await db.insert(transactionAgents).values({
       id: crypto.randomUUID(),
+      tenantId: tenant.tenantId, // stamped from session
       transactionId,
       agentId,
       side,
@@ -130,8 +182,8 @@ export async function removeTransactionAgent(
   agentId: string,
   side: 'listing' | 'buyer',
 ): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
 
   try {
     await db
@@ -141,6 +193,7 @@ export async function removeTransactionAgent(
           eq(transactionAgents.transactionId, transactionId),
           eq(transactionAgents.agentId, agentId),
           eq(transactionAgents.side, side),
+          eq(transactionAgents.tenantId, tenant.tenantId),
         ),
       );
 
@@ -158,8 +211,8 @@ export async function setTransactionAgentPrimary(
   agentId: string,
   side: 'listing' | 'buyer',
 ): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
 
   try {
     await db
@@ -169,6 +222,7 @@ export async function setTransactionAgentPrimary(
         and(
           eq(transactionAgents.transactionId, transactionId),
           eq(transactionAgents.side, side),
+          eq(transactionAgents.tenantId, tenant.tenantId),
         ),
       );
 
@@ -180,6 +234,7 @@ export async function setTransactionAgentPrimary(
           eq(transactionAgents.transactionId, transactionId),
           eq(transactionAgents.agentId, agentId),
           eq(transactionAgents.side, side),
+          eq(transactionAgents.tenantId, tenant.tenantId),
         ),
       );
 

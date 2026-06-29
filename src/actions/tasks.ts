@@ -29,7 +29,7 @@ import {
 } from 'drizzle-orm';
 import { format, addDays } from 'date-fns';
 import { revalidatePath } from 'next/cache';
-import { getViewerScope, transactionScopeCondition, requireWriteAccess } from '@/lib/access';
+import { getViewerScope, transactionScopeCondition, tenantScopeCondition, requireTenantWrite } from '@/lib/access';
 import { z } from 'zod';
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
@@ -73,6 +73,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
   const scope = await getViewerScope();
   const txScope = transactionScopeCondition(scope);
+  // Outer tenant ring on the transactions join (every task query joins transactions).
+  const tScope = tenantScopeCondition(scope, transactions.tenantId);
 
   const [dueTodayResult, dueWeekResult, overdueResult, closingResult] = await Promise.all([
     db
@@ -85,6 +87,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
           notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
           notInArray(transactions.status, ['closed', 'cancelled']),
           txScope,
+        tScope,
+          tScope,
         ),
       ),
 
@@ -100,6 +104,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
           notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
           notInArray(transactions.status, ['closed', 'cancelled']),
           txScope,
+        tScope,
+          tScope,
         ),
       ),
 
@@ -122,6 +128,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
             ),
           ),
           txScope,
+        tScope,
+          tScope,
         ),
       ),
 
@@ -135,6 +143,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
           lte(transactions.expectedCloseDate, next30),
           notInArray(transactions.status, ['closed', 'cancelled']),
           txScope,
+        tScope,
+          tScope,
         ),
       ),
   ]);
@@ -152,7 +162,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 export async function getUpcomingTasks(days = 7): Promise<TaskWithTransaction[]> {
   const today = todayStr();
   const end = daysFromNowStr(days);
-  const txScope = transactionScopeCondition(await getViewerScope());
+  const listScope = await getViewerScope();
+  const txScope = transactionScopeCondition(listScope);
+  const tScope = tenantScopeCondition(listScope, transactions.tenantId);
 
   const rows = await db
     .select({
@@ -182,6 +194,7 @@ export async function getUpcomingTasks(days = 7): Promise<TaskWithTransaction[]>
         notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
         notInArray(transactions.status, ['closed', 'cancelled']),
         txScope,
+        tScope,
       ),
     )
     .orderBy(asc(transactionTasks.dueDate));
@@ -193,7 +206,9 @@ export async function getUpcomingTasks(days = 7): Promise<TaskWithTransaction[]>
 
 export async function getOverdueTasks(): Promise<TaskWithTransaction[]> {
   const today = todayStr();
-  const txScope = transactionScopeCondition(await getViewerScope());
+  const listScope = await getViewerScope();
+  const txScope = transactionScopeCondition(listScope);
+  const tScope = tenantScopeCondition(listScope, transactions.tenantId);
 
   const rows = await db
     .select({
@@ -230,6 +245,7 @@ export async function getOverdueTasks(): Promise<TaskWithTransaction[]> {
           ),
         ),
         txScope,
+        tScope,
       ),
     )
     .orderBy(asc(transactionTasks.dueDate));
@@ -241,7 +257,9 @@ export async function getOverdueTasks(): Promise<TaskWithTransaction[]> {
 
 export async function getUpcomingDeadlines(limit = 10): Promise<TaskWithTransaction[]> {
   const today = todayStr();
-  const txScope = transactionScopeCondition(await getViewerScope());
+  const listScope = await getViewerScope();
+  const txScope = transactionScopeCondition(listScope);
+  const tScope = tenantScopeCondition(listScope, transactions.tenantId);
 
   const rows = await db
     .select({
@@ -270,6 +288,7 @@ export async function getUpcomingDeadlines(limit = 10): Promise<TaskWithTransact
         notInArray(transactionTasks.status, ['completed', 'waived', 'not_applicable']),
         notInArray(transactions.status, ['closed', 'cancelled']),
         txScope,
+        tScope,
       ),
     )
     .orderBy(asc(transactionTasks.dueDate))
@@ -285,8 +304,8 @@ export async function updateTaskStatus(
   status: 'pending' | 'in_progress' | 'completed' | 'overdue' | 'waived' | 'not_applicable',
   notes?: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
 
   try {
     const updateData: {
@@ -299,7 +318,10 @@ export async function updateTaskStatus(
     if (notes !== undefined) updateData.notes = notes;
     if (status === 'completed') updateData.completedDate = format(new Date(), 'yyyy-MM-dd');
 
-    await db.update(transactionTasks).set(updateData).where(eq(transactionTasks.id, id));
+    await db
+      .update(transactionTasks)
+      .set(updateData)
+      .where(and(eq(transactionTasks.id, id), eq(transactionTasks.tenantId, tenant.tenantId)));
 
     revalidatePath('/dashboard');
     revalidatePath('/transactions');
@@ -322,13 +344,22 @@ export async function createCustomTask(
     assignedTo?: string | null;
   },
 ): Promise<{ success: boolean; data?: { id: string }; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
 
   try {
+    // Parent transaction must be in this tenant (defends against forged id).
+    const [parent] = await db
+      .select({ id: transactions.id })
+      .from(transactions)
+      .where(and(eq(transactions.id, transactionId), eq(transactions.tenantId, tenant.tenantId)))
+      .limit(1);
+    if (!parent) return { success: false, error: 'Transaction not found' };
+
     const id = crypto.randomUUID();
     await db.insert(transactionTasks).values({
       id,
+      tenantId: tenant.tenantId,
       transactionId,
       templateId: null,
       name: data.name,
@@ -356,14 +387,14 @@ export async function snoozeTask(
   id: string,
   newDueDate: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
 
   try {
     await db
       .update(transactionTasks)
       .set({ dueDate: newDueDate, updatedAt: new Date() })
-      .where(eq(transactionTasks.id, id));
+      .where(and(eq(transactionTasks.id, id), eq(transactionTasks.tenantId, tenant.tenantId)));
 
     revalidatePath('/dashboard');
     revalidatePath('/transactions');
@@ -424,9 +455,11 @@ const templateSchema = z.object({
 });
 
 export async function getTaskTemplateGroups(): Promise<TaskTemplateGroup[]> {
+  const scope = await getViewerScope();
   return db
     .select()
     .from(taskTemplateGroups)
+    .where(tenantScopeCondition(scope, taskTemplateGroups.tenantId))
     .orderBy(asc(taskTemplateGroups.sortOrder), asc(taskTemplateGroups.createdAt));
 }
 
@@ -440,6 +473,7 @@ export type TemplateGroupOption = {
 export async function getTemplateGroupsForSelect(
   transactionType: string,
 ): Promise<TemplateGroupOption[]> {
+  const scope = await getViewerScope();
   const all = await db
     .select({
       id: taskTemplateGroups.id,
@@ -448,7 +482,7 @@ export async function getTemplateGroupsForSelect(
       transactionType: taskTemplateGroups.transactionType,
     })
     .from(taskTemplateGroups)
-    .where(eq(taskTemplateGroups.isActive, true))
+    .where(and(eq(taskTemplateGroups.isActive, true), tenantScopeCondition(scope, taskTemplateGroups.tenantId)))
     .orderBy(asc(taskTemplateGroups.sortOrder));
 
   return all.filter(
@@ -459,8 +493,9 @@ export async function getTemplateGroupsForSelect(
 export async function createTaskTemplateGroup(
   data: TemplateGroupFormValues,
 ): Promise<{ success: boolean; data?: TaskTemplateGroup; clonedTasks?: TaskTemplate[]; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
+  const tenantId = tenant.tenantId;
 
   const parsed = templateGroupSchema.safeParse(data);
   if (!parsed.success) {
@@ -472,6 +507,7 @@ export async function createTaskTemplateGroup(
     const now = new Date();
     await db.insert(taskTemplateGroups).values({
       id,
+      tenantId,
       name: v.name,
       description: v.description?.trim() || null,
       transactionType: v.transactionType,
@@ -483,7 +519,7 @@ export async function createTaskTemplateGroup(
     const [created] = await db
       .select()
       .from(taskTemplateGroups)
-      .where(eq(taskTemplateGroups.id, id));
+      .where(and(eq(taskTemplateGroups.id, id), eq(taskTemplateGroups.tenantId, tenantId)));
 
     // Clone tasks from the matching built-in group (if one exists for this type)
     let clonedTasks: TaskTemplate[] = [];
@@ -495,6 +531,7 @@ export async function createTaskTemplateGroup(
           and(
             eq(taskTemplateGroups.transactionType, v.transactionType),
             eq(taskTemplateGroups.isDefault, true),
+            eq(taskTemplateGroups.tenantId, tenantId),
           ),
         );
 
@@ -502,12 +539,13 @@ export async function createTaskTemplateGroup(
         const sourceTasks = await db
           .select()
           .from(taskTemplates)
-          .where(eq(taskTemplates.templateGroupId, sourceGroup.id))
+          .where(and(eq(taskTemplates.templateGroupId, sourceGroup.id), eq(taskTemplates.tenantId, tenantId)))
           .orderBy(asc(taskTemplates.sortOrder));
 
         if (sourceTasks.length > 0) {
           const cloneRows = sourceTasks.map((t) => ({
             id: crypto.randomUUID(),
+            tenantId,
             templateGroupId: id,
             name: t.name,
             description: t.description,
@@ -523,7 +561,7 @@ export async function createTaskTemplateGroup(
           clonedTasks = await db
             .select()
             .from(taskTemplates)
-            .where(eq(taskTemplates.templateGroupId, id))
+            .where(and(eq(taskTemplates.templateGroupId, id), eq(taskTemplates.tenantId, tenantId)))
             .orderBy(asc(taskTemplates.sortOrder));
         }
       }
@@ -540,8 +578,9 @@ export async function updateTaskTemplateGroup(
   id: string,
   data: TemplateGroupFormValues,
 ): Promise<{ success: boolean; data?: TaskTemplateGroup; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
+  const tenantId = tenant.tenantId;
 
   const parsed = templateGroupSchema.safeParse(data);
   if (!parsed.success) {
@@ -552,7 +591,7 @@ export async function updateTaskTemplateGroup(
     const [existing] = await db
       .select({ isDefault: taskTemplateGroups.isDefault })
       .from(taskTemplateGroups)
-      .where(eq(taskTemplateGroups.id, id));
+      .where(and(eq(taskTemplateGroups.id, id), eq(taskTemplateGroups.tenantId, tenantId)));
     if (!existing) return { success: false, error: 'Template group not found' };
 
     await db
@@ -564,11 +603,11 @@ export async function updateTaskTemplateGroup(
         ...(existing.isDefault ? {} : { transactionType: v.transactionType }),
         sortOrder: v.sortOrder ?? 100,
       })
-      .where(eq(taskTemplateGroups.id, id));
+      .where(and(eq(taskTemplateGroups.id, id), eq(taskTemplateGroups.tenantId, tenantId)));
     const [updated] = await db
       .select()
       .from(taskTemplateGroups)
-      .where(eq(taskTemplateGroups.id, id));
+      .where(and(eq(taskTemplateGroups.id, id), eq(taskTemplateGroups.tenantId, tenantId)));
     revalidatePath('/templates');
     return { success: true, data: updated };
   } catch (err) {
@@ -579,14 +618,15 @@ export async function updateTaskTemplateGroup(
 export async function deleteTaskTemplateGroup(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
+  const tenantId = tenant.tenantId;
 
   try {
     const [group] = await db
       .select({ isDefault: taskTemplateGroups.isDefault })
       .from(taskTemplateGroups)
-      .where(eq(taskTemplateGroups.id, id));
+      .where(and(eq(taskTemplateGroups.id, id), eq(taskTemplateGroups.tenantId, tenantId)));
     if (!group) return { success: false, error: 'Template group not found' };
     if (group.isDefault) return { success: false, error: 'Built-in templates cannot be deleted' };
 
@@ -597,18 +637,22 @@ export async function deleteTaskTemplateGroup(
       const groupTemplates = await tx
         .select({ id: taskTemplates.id })
         .from(taskTemplates)
-        .where(eq(taskTemplates.templateGroupId, id));
+        .where(and(eq(taskTemplates.templateGroupId, id), eq(taskTemplates.tenantId, tenantId)));
 
       if (groupTemplates.length > 0) {
         const templateIds = groupTemplates.map((t) => t.id);
         await tx
           .update(transactionTasks)
           .set({ templateId: null })
-          .where(inArray(transactionTasks.templateId, templateIds));
-        await tx.delete(taskTemplates).where(eq(taskTemplates.templateGroupId, id));
+          .where(and(inArray(transactionTasks.templateId, templateIds), eq(transactionTasks.tenantId, tenantId)));
+        await tx
+          .delete(taskTemplates)
+          .where(and(eq(taskTemplates.templateGroupId, id), eq(taskTemplates.tenantId, tenantId)));
       }
 
-      await tx.delete(taskTemplateGroups).where(eq(taskTemplateGroups.id, id));
+      await tx
+        .delete(taskTemplateGroups)
+        .where(and(eq(taskTemplateGroups.id, id), eq(taskTemplateGroups.tenantId, tenantId)));
     });
 
     revalidatePath('/templates');
@@ -621,20 +665,21 @@ export async function deleteTaskTemplateGroup(
 export async function toggleTaskTemplateGroupActive(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
+  const tenantId = tenant.tenantId;
 
   try {
     const [group] = await db
       .select({ isActive: taskTemplateGroups.isActive })
       .from(taskTemplateGroups)
-      .where(eq(taskTemplateGroups.id, id));
+      .where(and(eq(taskTemplateGroups.id, id), eq(taskTemplateGroups.tenantId, tenantId)));
     if (!group) return { success: false, error: 'Template group not found' };
 
     await db
       .update(taskTemplateGroups)
       .set({ isActive: !group.isActive })
-      .where(eq(taskTemplateGroups.id, id));
+      .where(and(eq(taskTemplateGroups.id, id), eq(taskTemplateGroups.tenantId, tenantId)));
     revalidatePath('/templates');
     return { success: true };
   } catch {
@@ -643,9 +688,11 @@ export async function toggleTaskTemplateGroupActive(
 }
 
 export async function getTaskTemplates(): Promise<TaskTemplate[]> {
+  const scope = await getViewerScope();
   return db
     .select()
     .from(taskTemplates)
+    .where(tenantScopeCondition(scope, taskTemplates.tenantId))
     .orderBy(asc(taskTemplates.sortOrder), desc(taskTemplates.createdAt));
 }
 
@@ -653,8 +700,9 @@ export async function createTaskTemplatesMulti(
   data: Omit<TaskTemplateFormValues, 'templateGroupId'>,
   groupIds: string[],
 ): Promise<{ success: boolean; data?: TaskTemplate[]; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
+  const tenantId = tenant.tenantId;
 
   if (!groupIds.length) return { success: false, error: 'At least one template group is required' };
 
@@ -666,8 +714,18 @@ export async function createTaskTemplatesMulti(
   const v = parsed.data;
 
   try {
-    const rows = groupIds.map((gid) => ({
+    // Only allow target groups that belong to this tenant (defends forged ids).
+    const ownGroups = await db
+      .select({ id: taskTemplateGroups.id })
+      .from(taskTemplateGroups)
+      .where(and(inArray(taskTemplateGroups.id, groupIds), eq(taskTemplateGroups.tenantId, tenantId)));
+    const ownGroupIds = new Set(ownGroups.map((g) => g.id));
+    const validGroupIds = groupIds.filter((g) => ownGroupIds.has(g));
+    if (!validGroupIds.length) return { success: false, error: 'Template group not found' };
+
+    const rows = validGroupIds.map((gid) => ({
       id: crypto.randomUUID(),
+      tenantId,
       templateGroupId: gid,
       name: v.name,
       description: v.description?.trim() || null,
@@ -685,7 +743,10 @@ export async function createTaskTemplatesMulti(
     const created = await db
       .select()
       .from(taskTemplates)
-      .where(sql`${taskTemplates.id} IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})`);
+      .where(and(
+        sql`${taskTemplates.id} IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})`,
+        eq(taskTemplates.tenantId, tenantId),
+      ));
 
     revalidatePath('/templates');
     return { success: true, data: created };
@@ -698,8 +759,9 @@ export async function createTaskTemplatesMulti(
 export async function createTaskTemplate(
   data: TaskTemplateFormValues,
 ): Promise<{ success: boolean; data?: TaskTemplate; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
+  const tenantId = tenant.tenantId;
 
   const parsed = templateSchema.safeParse(data);
   if (!parsed.success) {
@@ -708,9 +770,18 @@ export async function createTaskTemplate(
   const v = parsed.data;
 
   try {
+    // Target group must be in this tenant.
+    const [group] = await db
+      .select({ id: taskTemplateGroups.id })
+      .from(taskTemplateGroups)
+      .where(and(eq(taskTemplateGroups.id, v.templateGroupId), eq(taskTemplateGroups.tenantId, tenantId)))
+      .limit(1);
+    if (!group) return { success: false, error: 'Template group not found' };
+
     const id = crypto.randomUUID();
     await db.insert(taskTemplates).values({
       id,
+      tenantId,
       templateGroupId: v.templateGroupId,
       name: v.name,
       description: v.description?.trim() || null,
@@ -721,7 +792,10 @@ export async function createTaskTemplate(
       isRequired: v.isRequired,
       isActive: v.isActive,
     });
-    const [created] = await db.select().from(taskTemplates).where(eq(taskTemplates.id, id));
+    const [created] = await db
+      .select()
+      .from(taskTemplates)
+      .where(and(eq(taskTemplates.id, id), eq(taskTemplates.tenantId, tenantId)));
     revalidatePath('/templates');
     return { success: true, data: created };
   } catch (err) {
@@ -734,8 +808,9 @@ export async function updateTaskTemplate(
   id: string,
   data: TaskTemplateFormValues,
 ): Promise<{ success: boolean; data?: TaskTemplate; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
+  const tenantId = tenant.tenantId;
 
   const parsed = templateSchema.safeParse(data);
   if (!parsed.success) {
@@ -744,6 +819,14 @@ export async function updateTaskTemplate(
   const v = parsed.data;
 
   try {
+    // Reassigned group (if any) must be in this tenant.
+    const [group] = await db
+      .select({ id: taskTemplateGroups.id })
+      .from(taskTemplateGroups)
+      .where(and(eq(taskTemplateGroups.id, v.templateGroupId), eq(taskTemplateGroups.tenantId, tenantId)))
+      .limit(1);
+    if (!group) return { success: false, error: 'Template group not found' };
+
     await db
       .update(taskTemplates)
       .set({
@@ -757,8 +840,11 @@ export async function updateTaskTemplate(
         isRequired: v.isRequired,
         isActive: v.isActive,
       })
-      .where(eq(taskTemplates.id, id));
-    const [updated] = await db.select().from(taskTemplates).where(eq(taskTemplates.id, id));
+      .where(and(eq(taskTemplates.id, id), eq(taskTemplates.tenantId, tenantId)));
+    const [updated] = await db
+      .select()
+      .from(taskTemplates)
+      .where(and(eq(taskTemplates.id, id), eq(taskTemplates.tenantId, tenantId)));
     revalidatePath('/templates');
     return { success: true, data: updated };
   } catch (err) {
@@ -770,14 +856,15 @@ export async function updateTaskTemplate(
 export async function deleteTaskTemplate(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
+  const tenantId = tenant.tenantId;
 
   try {
     const [template] = await db
       .select({ id: taskTemplates.id })
       .from(taskTemplates)
-      .where(eq(taskTemplates.id, id));
+      .where(and(eq(taskTemplates.id, id), eq(taskTemplates.tenantId, tenantId)));
     if (!template) return { success: false, error: 'Task not found' };
 
     // Detach any stamped transaction tasks before deleting the template
@@ -785,9 +872,9 @@ export async function deleteTaskTemplate(
     await db
       .update(transactionTasks)
       .set({ templateId: null })
-      .where(eq(transactionTasks.templateId, id));
+      .where(and(eq(transactionTasks.templateId, id), eq(transactionTasks.tenantId, tenantId)));
 
-    await db.delete(taskTemplates).where(eq(taskTemplates.id, id));
+    await db.delete(taskTemplates).where(and(eq(taskTemplates.id, id), eq(taskTemplates.tenantId, tenantId)));
     revalidatePath('/templates');
     return { success: true };
   } catch (err) {
@@ -798,13 +885,17 @@ export async function deleteTaskTemplate(
 export async function reorderTaskTemplates(
   orderedIds: string[],
 ): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
+  const tenantId = tenant.tenantId;
 
   try {
     await Promise.all(
       orderedIds.map((id, i) =>
-        db.update(taskTemplates).set({ sortOrder: i * 10 }).where(eq(taskTemplates.id, id)),
+        db
+          .update(taskTemplates)
+          .set({ sortOrder: i * 10 })
+          .where(and(eq(taskTemplates.id, id), eq(taskTemplates.tenantId, tenantId))),
       ),
     );
     revalidatePath('/templates');
@@ -817,13 +908,17 @@ export async function reorderTaskTemplates(
 export async function reorderTransactionTasks(
   orderedIds: string[],
 ): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
+  const tenantId = tenant.tenantId;
 
   try {
     await Promise.all(
       orderedIds.map((id, i) =>
-        db.update(transactionTasks).set({ sortOrder: i * 10 }).where(eq(transactionTasks.id, id)),
+        db
+          .update(transactionTasks)
+          .set({ sortOrder: i * 10 })
+          .where(and(eq(transactionTasks.id, id), eq(transactionTasks.tenantId, tenantId))),
       ),
     );
     return { success: true };
@@ -835,21 +930,22 @@ export async function reorderTransactionTasks(
 export async function toggleTaskTemplateActive(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const denied = await requireWriteAccess();
-  if (denied) return denied;
+  const tenant = await requireTenantWrite();
+  if ('success' in tenant) return tenant;
+  const tenantId = tenant.tenantId;
 
   try {
     const [template] = await db
       .select({ isActive: taskTemplates.isActive })
       .from(taskTemplates)
-      .where(eq(taskTemplates.id, id));
+      .where(and(eq(taskTemplates.id, id), eq(taskTemplates.tenantId, tenantId)));
 
     if (!template) return { success: false, error: 'Template not found' };
 
     await db
       .update(taskTemplates)
       .set({ isActive: !template.isActive })
-      .where(eq(taskTemplates.id, id));
+      .where(and(eq(taskTemplates.id, id), eq(taskTemplates.tenantId, tenantId)));
 
     revalidatePath('/templates');
     return { success: true };
