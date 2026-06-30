@@ -90,11 +90,11 @@ describe('transactionScopeCondition', () => {
   const tenantBound = { tenantId: 't1', isPlatformAdmin: false };
   it('returns undefined (no filter) only for unrestricted viewers', () => {
     expect(
-      transactionScopeCondition({ role: 'admin', userId: 'u1', ...tenantBound, agentIds: null }),
+      transactionScopeCondition({ role: 'admin', userId: 'u1', ...tenantBound, agentIds: null, actingAs: null }),
     ).toBeUndefined();
   });
   it('returns a real condition (NOT undefined) for a no-match agent — must see nothing', () => {
-    const cond = transactionScopeCondition({ role: 'agent', userId: 'u1', ...tenantBound, agentIds: [] });
+    const cond = transactionScopeCondition({ role: 'agent', userId: 'u1', ...tenantBound, agentIds: [], actingAs: null });
     expect(cond).toBeDefined();
   });
 });
@@ -110,6 +110,7 @@ function scope(partial: Partial<ViewerScope>): ViewerScope {
     tenantId: 't1',
     isPlatformAdmin: false,
     agentIds: null,
+    actingAs: null,
     ...partial,
   };
 }

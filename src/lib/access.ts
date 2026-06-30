@@ -26,6 +26,9 @@ export type ViewerScope = {
   //   null        -> unrestricted within the tenant (admin/broker/tc).
   //   string[]    -> restricted to these agent ids. Empty array = sees nothing.
   agentIds: string[] | null;
+  // Non-droppable impersonation marker. Set ONLY when a platform admin is acting
+  // as a tenant; null otherwise. Reads identity; never grants scope by itself.
+  actingAs: { realAdminId: string; tenantId: string; expiresAt: number } | null;
 };
 
 export function normalizeEmail(email: string | null | undefined): string {
@@ -38,12 +41,14 @@ export function computeViewerScope(input: {
   tenantId: string | null;
   isPlatformAdmin: boolean;
   matchedAgentIds: string[];
+  actingAs?: ViewerScope['actingAs'];
 }): ViewerScope {
   const base = {
     userId: input.userId,
     role: input.role,
     tenantId: input.tenantId,
     isPlatformAdmin: input.isPlatformAdmin,
+    actingAs: input.actingAs ?? null,
   };
   // Privileged tenant roles are unrestricted on the AGENT ring (null). Tenant
   // isolation is enforced separately by the outer ring (tenantScopeCondition).
@@ -85,7 +90,7 @@ export const getViewerScope = cache(async (): Promise<ViewerScope> => {
     matchedAgentIds = rows.map((r) => r.id);
   }
 
-  return computeViewerScope({ role, userId, tenantId, isPlatformAdmin, matchedAgentIds });
+  return computeViewerScope({ role, userId, tenantId, isPlatformAdmin, matchedAgentIds, actingAs: null });
 });
 
 /**

@@ -13,6 +13,8 @@ declare module 'next-auth' {
       // Tenant membership. null only for platform superadmins.
       tenantId: string | null;
       isPlatformAdmin: boolean;
+      actingTenantId?: string | null;
+      actingExpiresAt?: number | null;
     };
   }
 
@@ -29,5 +31,7 @@ declare module 'next-auth/jwt' {
     role?: string;
     tenantId?: string | null;
     isPlatformAdmin?: boolean;
+    actingTenantId?: string | null;
+    actingExpiresAt?: number | null;
   }
 }
