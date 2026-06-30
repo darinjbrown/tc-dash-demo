@@ -20,6 +20,13 @@ const ALLOWLIST = [
   'src/db/seed.ts',
   'src/db/demo-seed.ts',
   'src/lib/tenant-query.ts',
+  // Platform superadmin surface. Every function gates on isPlatformAdmin and
+  // operates ACROSS tenants by design (plan §1.4). Its only owned-table touch is
+  // the tenantBranding insert in createTenant, which stamps a brand-new tenantId
+  // the platform admin is provisioning — not a session tenant — so neither
+  // tenantPredicate (reads) nor requireTenantWrite (would deny the tenant-less
+  // platform admin) applies. This is a legitimate cross-tenant path, not debt.
+  'src/actions/platform.ts',
 ];
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -36,8 +43,7 @@ function walk(dir: string, out: string[] = []): string[] {
 const SCOPE_MARKERS = ['tenantScopeCondition', 'requireTenantWrite', 'tenantPredicate'];
 
 describe('tenant chokepoint', () => {
-  // Un-skip in Task 5 once all sites are migrated.
-  it.skip('no owned-table query without a tenant predicate', () => {
+  it('no owned-table query without a tenant predicate', () => {
     const offenders: string[] = [];
     for (const file of walk('src')) {
       const rel = file.replace(/\\/g, '/');
