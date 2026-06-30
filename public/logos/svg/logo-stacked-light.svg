@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="150" viewBox="0 0 220 150" fill="none">
+  
+  <g transform="translate(86,8) scale(1)">
+  <polygon points="24,5 24,24 6,24" fill="#1C6B53"></polygon>
+  <polygon points="24,5 42,24 24,24" fill="#3FE0A0"></polygon>
+  <polygon points="42,24 24,43 24,24" fill="#14463A"></polygon>
+  <polygon points="6,24 24,43 24,24" fill="#0F4234"></polygon>
+  </g>
+  <text x="110" y="120" text-anchor="middle" font-family="&#39;Space Grotesk&#39;, sans-serif" font-size="32" letter-spacing="-0.8"><tspan font-weight="500" fill="#15201B">Power</tspan><tspan font-weight="700" fill="#14463A" dx="6">TC</tspan></text>
+</svg>
