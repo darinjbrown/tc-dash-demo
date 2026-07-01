@@ -3,7 +3,7 @@ import { db } from '@/db/client';
 import { tenantBranding } from '@/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { defaultBrand, type BrandConfig } from '@/lib/brand-config';
-import { getViewerScope } from '@/lib/access';
+import { getViewerScope, type ViewerScope } from '@/lib/access';
 import { tenantPredicate } from '@/lib/tenant-query';
 
 /**
@@ -53,10 +53,27 @@ export function rowToBrandConfig(row: {
  * branding row yet (so the app always renders).
  */
 export async function getBrandForTenant(tenantId: string): Promise<BrandConfig> {
+  // Route through the chokepoint so no unscoped owned-table read lives in this
+  // file. Callers always pass a session-derived tenantId; a minimal scope bound
+  // to it makes tenantPredicate resolve to eq(tenantBranding.tenantId, tenantId),
+  // and we AND that explicit row lookup in — identical single-row behavior.
+  const scope: ViewerScope = {
+    userId: null,
+    role: 'admin',
+    tenantId,
+    isPlatformAdmin: false,
+    agentIds: null,
+    actingAs: null,
+  };
   const [row] = await db
     .select()
     .from(tenantBranding)
-    .where(eq(tenantBranding.tenantId, tenantId));
+    .where(
+      and(
+        tenantPredicate(scope, tenantBranding.tenantId),
+        eq(tenantBranding.tenantId, tenantId),
+      ),
+    );
   if (!row) return defaultBrand;
   return rowToBrandConfig(row);
 }
