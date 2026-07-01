@@ -15,6 +15,7 @@ import { eq, count, sql, asc, desc, inArray, and, notInArray } from 'drizzle-orm
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/lib/auth';
 import { getViewerScope, transactionScopeCondition, tenantScopeCondition, requireTenantWrite } from '@/lib/access';
+import { logActivity } from '@/lib/activity';
 import { stampTasks, recalculateTaskDueDates } from '@/lib/task-stamping';
 import { transactionSchema } from '@/lib/transaction-schema';
 import type { TransactionFormValues } from '@/lib/transaction-schema';
@@ -547,11 +548,9 @@ export async function createTransaction(
         .values(stamped.map((t) => ({ id: crypto.randomUUID(), tenantId, ...t })));
     }
 
-    await db.insert(activityLog).values({
-      id: crypto.randomUUID(),
+    await logActivity({
       tenantId,
       transactionId: id,
-      userId,
       action: 'created',
       details: JSON.stringify({ address: values.address }),
     }).catch(() => {/* activity log is non-critical */});
@@ -579,8 +578,6 @@ export async function updateTransaction(
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
   }
 
-  const session = await auth();
-  const userId = session?.user?.id ?? null;
   const values = parsed.data;
 
   try {
@@ -659,11 +656,9 @@ export async function updateTransaction(
       }
     }
 
-    await db.insert(activityLog).values({
-      id: crypto.randomUUID(),
+    await logActivity({
       tenantId,
       transactionId: id,
-      userId,
       action: 'updated',
       details: JSON.stringify({ address: values.address }),
     }).catch(() => {/* activity log is non-critical */});
@@ -687,20 +682,15 @@ export async function updateTransactionStatus(
   if ('success' in tenant) return tenant;
   const tenantId = tenant.tenantId;
 
-  const session = await auth();
-  const userId = session?.user?.id ?? null;
-
   try {
     await db
       .update(transactions)
       .set({ status: status as Transaction['status'], updatedAt: new Date() })
       .where(and(eq(transactions.id, id), eq(transactions.tenantId, tenantId)));
 
-    await db.insert(activityLog).values({
-      id: crypto.randomUUID(),
+    await logActivity({
       tenantId,
       transactionId: id,
-      userId,
       action: 'status_changed',
       details: JSON.stringify({ status }),
     });
