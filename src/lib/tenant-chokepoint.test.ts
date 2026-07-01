@@ -27,6 +27,10 @@ const ALLOWLIST = [
   // tenantPredicate (reads) nor requireTenantWrite (would deny the tenant-less
   // platform admin) applies. This is a legitimate cross-tenant path, not debt.
   'src/actions/platform.ts',
+  // Sanctioned activity-writer. logActivity stamps tenantId explicitly from its
+  // caller (already a scoped tenantId) and derives attribution from
+  // getViewerScope() server-side; it is the single chokepoint for activityLog writes.
+  'src/lib/activity.ts',
 ];
 
 function walk(dir: string, out: string[] = []): string[] {
