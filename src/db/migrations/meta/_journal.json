@@ -8,6 +8,13 @@
       "when": 1782173572346,
       "tag": "0000_multi_tenant_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1782863288989,
+      "tag": "0001_first_toxin",
+      "breakpoints": true
     }
   ]
 }

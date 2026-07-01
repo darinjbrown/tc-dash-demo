@@ -17,7 +17,7 @@ export class InactiveTenantError extends CredentialsSignin {
   code = 'inactive';
 }
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   ...authConfig,
   adapter: DrizzleAdapter(db),
   providers: [
@@ -78,3 +78,5 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
 });
+
+export { unstable_update as updateAuthSession };

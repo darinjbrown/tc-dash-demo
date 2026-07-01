@@ -3,7 +3,9 @@ import { redirect } from 'next/navigation';
 import { listTenants } from '@/actions/platform';
 import { PlatformConsole } from './_components/platform-console';
 
-export const metadata = { title: 'Platform Console' };
+export const metadata = { title: 'Power TC — Platform console' };
+
+const FONT_DISPLAY = "var(--font-space-grotesk), 'Space Grotesk', sans-serif";
 
 export default async function PlatformPage() {
   const session = await auth();
@@ -14,14 +16,22 @@ export default async function PlatformPage() {
   const tenants = await listTenants();
 
   return (
-    <div className="mx-auto max-w-5xl p-6 sm:p-10 space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Platform Console</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            d20web administration — create offices and toggle them active/inactive.
-          </p>
-        </div>
+    <div style={{ maxWidth: 1180, margin: '0 auto', padding: 'clamp(28px,5vw,48px) 28px' }}>
+      <div style={{ marginBottom: 28 }}>
+        <h1
+          style={{
+            fontFamily: FONT_DISPLAY,
+            fontWeight: 600,
+            fontSize: 28,
+            letterSpacing: '-.02em',
+            color: '#15201B',
+          }}
+        >
+          Offices
+        </h1>
+        <p style={{ fontSize: 14.5, color: '#5C6B64', marginTop: 4 }}>
+          d20web administration — create offices and toggle them active or inactive.
+        </p>
       </div>
 
       <PlatformConsole initialTenants={tenants} />

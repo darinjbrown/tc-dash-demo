@@ -5,6 +5,7 @@ import { agents, transactions, transactionAgents } from '@/db/schema';
 import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { canManageAll, isReadOnlyRole } from '@/lib/roles';
+import { isActingActive } from '@/lib/acting';
 
 // Re-exported so server callers can keep importing role predicates from one
 // place. The Edge proxy imports them directly from '@/lib/roles' (Edge-safe).
@@ -26,6 +27,9 @@ export type ViewerScope = {
   //   null        -> unrestricted within the tenant (admin/broker/tc).
   //   string[]    -> restricted to these agent ids. Empty array = sees nothing.
   agentIds: string[] | null;
+  // Non-droppable impersonation marker. Set ONLY when a platform admin is acting
+  // as a tenant; null otherwise. Reads identity; never grants scope by itself.
+  actingAs: { realAdminId: string; tenantId: string; expiresAt: number } | null;
 };
 
 export function normalizeEmail(email: string | null | undefined): string {
@@ -38,12 +42,14 @@ export function computeViewerScope(input: {
   tenantId: string | null;
   isPlatformAdmin: boolean;
   matchedAgentIds: string[];
+  actingAs?: ViewerScope['actingAs'];
 }): ViewerScope {
   const base = {
     userId: input.userId,
     role: input.role,
     tenantId: input.tenantId,
     isPlatformAdmin: input.isPlatformAdmin,
+    actingAs: input.actingAs ?? null,
   };
   // Privileged tenant roles are unrestricted on the AGENT ring (null). Tenant
   // isolation is enforced separately by the outer ring (tenantScopeCondition).
@@ -64,29 +70,55 @@ export function computeViewerScope(input: {
  */
 export const getViewerScope = cache(async (): Promise<ViewerScope> => {
   const session = await auth();
-  // Default to the most restricted role when unknown (fail-closed).
   const u = session?.user as
-    | { role?: string; tenantId?: string | null; isPlatformAdmin?: boolean }
+    | { role?: string; tenantId?: string | null; isPlatformAdmin?: boolean;
+        actingTenantId?: string | null; actingExpiresAt?: number | null }
     | undefined;
-  const role = u?.role ?? 'agent';
+  const rawRole = u?.role ?? 'agent';
   const userId = session?.user?.id ?? null;
-  const tenantId = u?.tenantId ?? null;
-  const isPlatformAdmin = u?.isPlatformAdmin ?? false;
-  const email = normalizeEmail(session?.user?.email);
+  const rawTenantId = u?.tenantId ?? null;
+  const rawIsPlatformAdmin = u?.isPlatformAdmin ?? false;
 
+  // Acting-as: a platform admin with a live acting claim becomes an EFFECTIVE
+  // tenant admin for that office. The platform flag is dropped in effective scope
+  // so the no-filter branch can never fire; a non-droppable actingAs marker is set.
+  if (isActingActive(
+    { isPlatformAdmin: rawIsPlatformAdmin, actingTenantId: u?.actingTenantId, actingExpiresAt: u?.actingExpiresAt },
+    Date.now(),
+  )) {
+    const tenantId = u!.actingTenantId as string;
+    return computeViewerScope({
+      role: 'admin', userId, tenantId, isPlatformAdmin: false, matchedAgentIds: [],
+      actingAs: { realAdminId: userId as string, tenantId, expiresAt: u!.actingExpiresAt as number },
+    });
+  }
+
+  const email = normalizeEmail(session?.user?.email);
   let matchedAgentIds: string[] = [];
-  // Only resolve the agent ring for read-only tenant users that actually have a
-  // tenant. A tenant-less, non-platform user is fail-closed below regardless.
-  if (isReadOnlyRole(role) && email && tenantId) {
+  if (isReadOnlyRole(rawRole) && email && rawTenantId) {
     const rows = await db
       .select({ id: agents.id })
       .from(agents)
-      .where(and(eq(agents.tenantId, tenantId), sql`lower(${agents.email}) = ${email}`));
+      .where(and(eq(agents.tenantId, rawTenantId), sql`lower(${agents.email}) = ${email}`));
     matchedAgentIds = rows.map((r) => r.id);
   }
-
-  return computeViewerScope({ role, userId, tenantId, isPlatformAdmin, matchedAgentIds });
+  return computeViewerScope({
+    role: rawRole, userId, tenantId: rawTenantId, isPlatformAdmin: rawIsPlatformAdmin,
+    matchedAgentIds, actingAs: null,
+  });
 });
+
+export function rawPlatformAdminFromSession(
+  session: { user?: { isPlatformAdmin?: boolean } } | null,
+): boolean {
+  return session?.user?.isPlatformAdmin === true;
+}
+
+/** Reads the RAW platform flag (true even while acting). Gates enter/exit. */
+export async function requireRawPlatformAdmin(): Promise<boolean> {
+  const session = await auth();
+  return rawPlatformAdminFromSession(session);
+}
 
 /**
  * Guard for mutations. Returns the standard error object when the viewer is a

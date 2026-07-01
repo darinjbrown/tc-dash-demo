@@ -33,7 +33,24 @@ import {
   taskTemplates,
   taskTemplateGroups,
 } from '@/db/schema';
-import { computeViewerScope, tenantScopeCondition } from '@/lib/access';
+import { computeViewerScope, tenantScopeCondition, type ViewerScope } from '@/lib/access';
+import { isActingActive } from './acting';
+
+// Drizzle SQL objects stringify to "[object Object]"; flatten the query chunks to
+// inspect the rendered predicate text (StringChunks, column names, and bound param
+// values) so assertions on the predicate are meaningful, not trivially-true.
+function renderSql(sql: unknown): string {
+  const chunks = (sql as { queryChunks?: unknown[] } | undefined)?.queryChunks ?? [];
+  return chunks
+    .map((c) => {
+      const v = (c as { value?: unknown }).value;
+      if (Array.isArray(v)) return v.join('');
+      if (typeof v === 'string') return v; // bound Param value (e.g. the tenant id)
+      const name = (c as { name?: unknown }).name;
+      return typeof name === 'string' ? name : '';
+    })
+    .join('');
+}
 
 let client: Client;
 let db: LibSQLDatabase<typeof schema>;
@@ -187,5 +204,30 @@ describe('fail-closed when no tenant', () => {
     expect(cond).toBeUndefined();
     const rows = await db.select().from(transactions).where(cond);
     expect(rows.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('acting-as isolation', () => {
+  it('effective acting scope scopes to the target tenant only (no no-filter branch)', () => {
+    const acting: ViewerScope = {
+      userId: 'admin1', role: 'admin', tenantId: 'tenantA', isPlatformAdmin: false,
+      agentIds: null, actingAs: { realAdminId: 'admin1', tenantId: 'tenantA', expiresAt: 9 },
+    };
+    const cond = tenantScopeCondition(acting, transactions.tenantId);
+    // Not undefined (no-filter) and not 1=0 — a real eq() predicate on tenant_id.
+    expect(cond).toBeDefined();
+    expect(renderSql(cond)).toContain('tenant_id');
+  });
+
+  it('expired acting claim is inert', () => {
+    expect(isActingActive(
+      { isPlatformAdmin: true, actingTenantId: 'tenantA', actingExpiresAt: 1 }, 2,
+    )).toBe(false);
+  });
+
+  it('acting claim on a NON-platform session is inert (forged cookie/claim)', () => {
+    expect(isActingActive(
+      { isPlatformAdmin: false, actingTenantId: 'tenantA', actingExpiresAt: 9 }, 1,
+    )).toBe(false);
   });
 });

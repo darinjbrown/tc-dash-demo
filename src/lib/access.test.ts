@@ -18,6 +18,7 @@ import {
   canManageAll,
   transactionScopeCondition,
   tenantScopeCondition,
+  rawPlatformAdminFromSession,
 } from '@/lib/access';
 import type { ViewerScope } from '@/lib/access';
 import { tenants, transactions } from '@/db/schema';
@@ -64,6 +65,19 @@ describe('computeViewerScope', () => {
   });
 });
 
+describe('acting effective scope', () => {
+  it('acting input => effective tenant admin, no platform flag, actingAs preserved', () => {
+    const s = computeViewerScope({
+      role: 'admin', userId: 'admin1', tenantId: 't-target', isPlatformAdmin: false,
+      matchedAgentIds: [], actingAs: { realAdminId: 'admin1', tenantId: 't-target', expiresAt: 9 },
+    });
+    expect(s.tenantId).toBe('t-target');
+    expect(s.isPlatformAdmin).toBe(false);
+    expect(s.agentIds).toBeNull();
+    expect(s.actingAs).toEqual({ realAdminId: 'admin1', tenantId: 't-target', expiresAt: 9 });
+  });
+});
+
 describe('canManageAll', () => {
   it('is an allowlist of privileged roles', () => {
     expect(canManageAll('admin')).toBe(true);
@@ -90,11 +104,11 @@ describe('transactionScopeCondition', () => {
   const tenantBound = { tenantId: 't1', isPlatformAdmin: false };
   it('returns undefined (no filter) only for unrestricted viewers', () => {
     expect(
-      transactionScopeCondition({ role: 'admin', userId: 'u1', ...tenantBound, agentIds: null }),
+      transactionScopeCondition({ role: 'admin', userId: 'u1', ...tenantBound, agentIds: null, actingAs: null }),
     ).toBeUndefined();
   });
   it('returns a real condition (NOT undefined) for a no-match agent — must see nothing', () => {
-    const cond = transactionScopeCondition({ role: 'agent', userId: 'u1', ...tenantBound, agentIds: [] });
+    const cond = transactionScopeCondition({ role: 'agent', userId: 'u1', ...tenantBound, agentIds: [], actingAs: null });
     expect(cond).toBeDefined();
   });
 });
@@ -110,6 +124,7 @@ function scope(partial: Partial<ViewerScope>): ViewerScope {
     tenantId: 't1',
     isPlatformAdmin: false,
     agentIds: null,
+    actingAs: null,
     ...partial,
   };
 }
@@ -160,5 +175,13 @@ describe('composition: tenant ring AND agent ring', () => {
     });
     expect(transactionScopeCondition(s)).toBeDefined(); // inner ring active
     expect(tenantScopeCondition(s, transactions.tenantId)).toBeDefined(); // outer ring active
+  });
+});
+
+describe('rawPlatformAdminFromSession', () => {
+  it('true only when the raw JWT flag is set', () => {
+    expect(rawPlatformAdminFromSession({ user: { isPlatformAdmin: true } })).toBe(true);
+    expect(rawPlatformAdminFromSession({ user: { isPlatformAdmin: false } })).toBe(false);
+    expect(rawPlatformAdminFromSession(null)).toBe(false);
   });
 });

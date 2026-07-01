@@ -864,7 +864,7 @@ export function TransactionDetail({ transaction: tx }: TransactionDetailProps) {
                   <div className="flex-1 pt-1.5 min-w-0">
                     <p className="text-sm">{activityDescription(entry.action, entry.details)}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {entry.userName ? `${entry.userName} · ` : ''}
+                      {entry.actorName ? `${entry.actorName} · ` : ''}
                       {entry.createdAt
                         ? formatDistanceToNow(
                             entry.createdAt instanceof Date

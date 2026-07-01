@@ -318,6 +318,13 @@ export const activityLog = sqliteTable('activity_log', {
     .references(() => tenants.id),
   transactionId: text('transaction_id').references(() => transactions.id),
   userId: text('user_id'),
+  // Cross-tenant actor attribution. True when a platform admin wrote this row
+  // while "acting as" the office. actorLabel is denormalized because the
+  // platform admin is not a user of this tenant (the feed can't join to resolve).
+  actorIsPlatformAdmin: integer('actor_is_platform_admin', { mode: 'boolean' })
+    .default(false)
+    .notNull(),
+  actorLabel: text('actor_label'),
   action: text('action').notNull(), // 'created' | 'updated' | 'status_changed' | 'task_completed' | 'note_added'
   details: text('details'), // JSON string with change details
   createdAt: integer('created_at', { mode: 'timestamp_ms' })

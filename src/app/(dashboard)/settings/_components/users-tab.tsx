@@ -100,9 +100,11 @@ function TempPasswordDialog({
 export function UsersTab({
   initialUsers,
   currentUserId,
+  actingOffice,
 }: {
   initialUsers: UserRow[];
   currentUserId: string;
+  actingOffice?: string | null;
 }) {
   const [users, setUsers] = useState<UserRow[]>(initialUsers);
   const [formOpen, setFormOpen] = useState(false);
@@ -272,9 +274,17 @@ export function UsersTab({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete user?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete{' '}
-              <strong>{deleteTarget?.name ?? deleteTarget?.email}</strong>. This action cannot be
-              undone.
+              {actingOffice ? (
+                `You are acting as ${actingOffice}. This permanently deletes ${
+                  deleteTarget?.name ?? deleteTarget?.email
+                } in THEIR office. Continue?`
+              ) : (
+                <>
+                  This will permanently delete{' '}
+                  <strong>{deleteTarget?.name ?? deleteTarget?.email}</strong>. This action cannot
+                  be undone.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

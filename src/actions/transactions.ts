@@ -15,6 +15,7 @@ import { eq, count, sql, asc, desc, inArray, and, notInArray } from 'drizzle-orm
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/lib/auth';
 import { getViewerScope, transactionScopeCondition, tenantScopeCondition, requireTenantWrite } from '@/lib/access';
+import { logActivity } from '@/lib/activity';
 import { stampTasks, recalculateTaskDueDates } from '@/lib/task-stamping';
 import { transactionSchema } from '@/lib/transaction-schema';
 import type { TransactionFormValues } from '@/lib/transaction-schema';
@@ -70,6 +71,9 @@ export type ActivityEntry = {
   details: string | null;
   createdAt: Date | null;
   userName: string | null;
+  actorIsPlatformAdmin: boolean;
+  actorLabel: string | null;
+  actorName: string | null;
 };
 
 export type TransactionDetail = Transaction & {
@@ -373,6 +377,8 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
         details: activityLog.details,
         createdAt: activityLog.createdAt,
         userName: sql<string | null>`(select name from users where users.id = ${activityLog.userId})`,
+        actorIsPlatformAdmin: activityLog.actorIsPlatformAdmin,
+        actorLabel: activityLog.actorLabel,
       })
       .from(activityLog)
       .where(eq(activityLog.transactionId, id))
@@ -421,12 +427,17 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
       isPrimary: r.isPrimary,
     }));
 
+  const activity: ActivityEntry[] = activityRows.map((r) => ({
+    ...r,
+    actorName: r.actorIsPlatformAdmin ? (r.actorLabel ?? 'd20web (support)') : r.userName,
+  }));
+
   return {
     ...txRow,
     listingAgents,
     buyerAgents,
     tasks,
-    activity: activityRows,
+    activity,
   };
 }
 
@@ -547,11 +558,9 @@ export async function createTransaction(
         .values(stamped.map((t) => ({ id: crypto.randomUUID(), tenantId, ...t })));
     }
 
-    await db.insert(activityLog).values({
-      id: crypto.randomUUID(),
+    await logActivity({
       tenantId,
       transactionId: id,
-      userId,
       action: 'created',
       details: JSON.stringify({ address: values.address }),
     }).catch(() => {/* activity log is non-critical */});
@@ -579,8 +588,6 @@ export async function updateTransaction(
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid data' };
   }
 
-  const session = await auth();
-  const userId = session?.user?.id ?? null;
   const values = parsed.data;
 
   try {
@@ -659,11 +666,9 @@ export async function updateTransaction(
       }
     }
 
-    await db.insert(activityLog).values({
-      id: crypto.randomUUID(),
+    await logActivity({
       tenantId,
       transactionId: id,
-      userId,
       action: 'updated',
       details: JSON.stringify({ address: values.address }),
     }).catch(() => {/* activity log is non-critical */});
@@ -687,20 +692,15 @@ export async function updateTransactionStatus(
   if ('success' in tenant) return tenant;
   const tenantId = tenant.tenantId;
 
-  const session = await auth();
-  const userId = session?.user?.id ?? null;
-
   try {
     await db
       .update(transactions)
       .set({ status: status as Transaction['status'], updatedAt: new Date() })
       .where(and(eq(transactions.id, id), eq(transactions.tenantId, tenantId)));
 
-    await db.insert(activityLog).values({
-      id: crypto.randomUUID(),
+    await logActivity({
       tenantId,
       transactionId: id,
-      userId,
       action: 'status_changed',
       details: JSON.stringify({ status }),
     });

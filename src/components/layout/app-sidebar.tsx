@@ -90,7 +90,7 @@ export function AppSidebar() {
               tooltip={brand.name}
               className="h-auto gap-3 group-data-[collapsible=icon]:p-1.5! [&>span:last-child]:whitespace-normal"
             >
-              <Link href="/dashboard">
+              <Link href="/">
                 {/* Full wordmark when expanded — constrained to the sidebar width so it
                     never overflows onto the top bar. Hidden in collapsed icon mode. */}
                 <img
