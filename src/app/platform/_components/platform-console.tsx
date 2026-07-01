@@ -2,11 +2,12 @@
 
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { Plus, Power, PowerOff, Building2 } from 'lucide-react';
+import { Plus, Power, PowerOff, Building2, LogIn } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger,
 } from '@/components/ui/dialog';
 import { createTenant, setTenantActive, type TenantRow } from '@/actions/platform';
+import { enterTenant } from '@/actions/acting';
 
 const FONT_DISPLAY = "var(--font-space-grotesk), 'Space Grotesk', sans-serif";
 const FONT_MONO = "var(--font-jetbrains-mono), 'JetBrains Mono', monospace";
@@ -254,15 +255,29 @@ export function PlatformConsole({ initialTenants }: { initialTenants: TenantRow[
                 </div>
               </div>
             </div>
-            <button
-              type="button"
-              className={`ptc-btn ptc-btn-sm ${t.isActive ? 'ptc-btn-outline' : 'ptc-btn-primary'}`}
-              disabled={pending}
-              onClick={() => toggleActive(t)}
-            >
-              {t.isActive ? <PowerOff className="size-4" /> : <Power className="size-4" />}
-              {t.isActive ? 'Deactivate' : 'Activate'}
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}>
+              <button
+                type="button"
+                className="ptc-btn ptc-btn-sm ptc-btn-outline"
+                disabled={pending}
+                onClick={() => startTransition(async () => {
+                  const res = await enterTenant(t.id);
+                  if (res && !res.success) toast.error(res.error);
+                  // success path redirects server-side; no client nav needed.
+                })}
+              >
+                <LogIn className="size-4" /> Enter
+              </button>
+              <button
+                type="button"
+                className={`ptc-btn ptc-btn-sm ${t.isActive ? 'ptc-btn-outline' : 'ptc-btn-primary'}`}
+                disabled={pending}
+                onClick={() => toggleActive(t)}
+              >
+                {t.isActive ? <PowerOff className="size-4" /> : <Power className="size-4" />}
+                {t.isActive ? 'Deactivate' : 'Activate'}
+              </button>
+            </div>
           </div>
         ))}
       </div>
