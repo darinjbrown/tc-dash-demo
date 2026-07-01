@@ -64,6 +64,19 @@ describe('computeViewerScope', () => {
   });
 });
 
+describe('acting effective scope', () => {
+  it('acting input => effective tenant admin, no platform flag, actingAs preserved', () => {
+    const s = computeViewerScope({
+      role: 'admin', userId: 'admin1', tenantId: 't-target', isPlatformAdmin: false,
+      matchedAgentIds: [], actingAs: { realAdminId: 'admin1', tenantId: 't-target', expiresAt: 9 },
+    });
+    expect(s.tenantId).toBe('t-target');
+    expect(s.isPlatformAdmin).toBe(false);
+    expect(s.agentIds).toBeNull();
+    expect(s.actingAs).toEqual({ realAdminId: 'admin1', tenantId: 't-target', expiresAt: 9 });
+  });
+});
+
 describe('canManageAll', () => {
   it('is an allowlist of privileged roles', () => {
     expect(canManageAll('admin')).toBe(true);
