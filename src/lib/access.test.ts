@@ -18,6 +18,7 @@ import {
   canManageAll,
   transactionScopeCondition,
   tenantScopeCondition,
+  rawPlatformAdminFromSession,
 } from '@/lib/access';
 import type { ViewerScope } from '@/lib/access';
 import { tenants, transactions } from '@/db/schema';
@@ -174,5 +175,13 @@ describe('composition: tenant ring AND agent ring', () => {
     });
     expect(transactionScopeCondition(s)).toBeDefined(); // inner ring active
     expect(tenantScopeCondition(s, transactions.tenantId)).toBeDefined(); // outer ring active
+  });
+});
+
+describe('rawPlatformAdminFromSession', () => {
+  it('true only when the raw JWT flag is set', () => {
+    expect(rawPlatformAdminFromSession({ user: { isPlatformAdmin: true } })).toBe(true);
+    expect(rawPlatformAdminFromSession({ user: { isPlatformAdmin: false } })).toBe(false);
+    expect(rawPlatformAdminFromSession(null)).toBe(false);
   });
 });

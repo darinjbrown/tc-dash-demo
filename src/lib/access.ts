@@ -108,6 +108,18 @@ export const getViewerScope = cache(async (): Promise<ViewerScope> => {
   });
 });
 
+export function rawPlatformAdminFromSession(
+  session: { user?: { isPlatformAdmin?: boolean } } | null,
+): boolean {
+  return session?.user?.isPlatformAdmin === true;
+}
+
+/** Reads the RAW platform flag (true even while acting). Gates enter/exit. */
+export async function requireRawPlatformAdmin(): Promise<boolean> {
+  const session = await auth();
+  return rawPlatformAdminFromSession(session);
+}
+
 /**
  * Guard for mutations. Returns the standard error object when the viewer is a
  * read-only role OR has no tenant (and is not a platform admin). Returns null to
