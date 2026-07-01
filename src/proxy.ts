@@ -2,6 +2,7 @@ import NextAuth from 'next-auth';
 import { NextResponse } from 'next/server';
 import { authConfig } from '@/lib/auth.config';
 import { isForbiddenForRole, isPlatformPath } from '@/lib/roles';
+import { isActingNow } from '@/lib/proxy-routing';
 
 // Edge-safe instance: built from authConfig only, so no Node-only code
 // (bcrypt / Drizzle adapter) is pulled into the Edge proxy bundle.
@@ -28,11 +29,18 @@ export default auth((req) => {
   // ---- authenticated from here down ----
   // Tenant + platform claims come straight off the signed JWT (never the URL).
   const user = req.auth?.user as
-    | { role?: string; tenantId?: string | null; isPlatformAdmin?: boolean }
+    | { role?: string; tenantId?: string | null; isPlatformAdmin?: boolean;
+        actingTenantId?: string | null; actingExpiresAt?: number | null }
     | undefined;
   const role = user?.role ?? 'agent';
   const tenantId = user?.tenantId ?? null;
   const isPlatformAdmin = user?.isPlatformAdmin ?? false;
+  const acting = isActingNow({
+    pathname: nextUrl.pathname, isPlatformAdmin, tenantId,
+    actingTenantId: user?.actingTenantId ?? null,
+    actingExpiresAt: user?.actingExpiresAt ?? null,
+    now: Date.now(),
+  });
 
   // Dead-end token: authenticated, but a non-admin with NO tenant binding. Its
   // claims can't scope any data, so force a clean re-login. This arises whenever
@@ -70,9 +78,9 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
-  // A platform admin has no tenant, so keep them on /platform rather than the
-  // tenant dashboard (which would fail-closed to empty).
-  if (isPlatformAdmin && nextUrl.pathname.startsWith('/dashboard')) {
+  // A non-acting platform admin has no tenant; keep them on /platform. When
+  // ACTING, they ARE tenant-scoped, so let them into the dashboard.
+  if (isPlatformAdmin && !acting && nextUrl.pathname.startsWith('/dashboard')) {
     return NextResponse.redirect(new URL('/platform', nextUrl.origin));
   }
 
