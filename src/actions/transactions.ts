@@ -71,6 +71,9 @@ export type ActivityEntry = {
   details: string | null;
   createdAt: Date | null;
   userName: string | null;
+  actorIsPlatformAdmin: boolean;
+  actorLabel: string | null;
+  actorName: string | null;
 };
 
 export type TransactionDetail = Transaction & {
@@ -374,6 +377,8 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
         details: activityLog.details,
         createdAt: activityLog.createdAt,
         userName: sql<string | null>`(select name from users where users.id = ${activityLog.userId})`,
+        actorIsPlatformAdmin: activityLog.actorIsPlatformAdmin,
+        actorLabel: activityLog.actorLabel,
       })
       .from(activityLog)
       .where(eq(activityLog.transactionId, id))
@@ -422,12 +427,17 @@ export async function getTransactionById(id: string): Promise<TransactionDetail 
       isPrimary: r.isPrimary,
     }));
 
+  const activity: ActivityEntry[] = activityRows.map((r) => ({
+    ...r,
+    actorName: r.actorIsPlatformAdmin ? (r.actorLabel ?? 'd20web (support)') : r.userName,
+  }));
+
   return {
     ...txRow,
     listingAgents,
     buyerAgents,
     tasks,
-    activity: activityRows,
+    activity,
   };
 }
 
