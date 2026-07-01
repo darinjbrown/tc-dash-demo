@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { powerTcFontVars } from '@/lib/power-tc-fonts';
 import { PowerTcLogo } from '@/components/brand/power-tc-logo';
 
@@ -30,7 +31,9 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
             gap: 14,
           }}
         >
-          <PowerTcLogo variant="dark" markSize={30} gap={10} />
+          <Link href="/" aria-label="Power TC home" style={{ display: 'inline-flex' }}>
+            <PowerTcLogo variant="dark" markSize={30} gap={10} />
+          </Link>
           <span style={{ width: 1, height: 22, background: '#1F4A3D' }} aria-hidden="true" />
           <span
             style={{
